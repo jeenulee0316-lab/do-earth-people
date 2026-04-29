@@ -1,114 +1,122 @@
-// app/donor/new/page.tsx
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 
-export default function NewItem() {
-  const router = useRouter()
-  const [loading, setLoading] = useState(false)
-  const [formData, setFormData] = useState({
-    title: '',
-    category: 'daily',
-    grade: 'A',
-    description: ''
-  })
+export default function OffloadList() {
+  const [rawInput, setRawInput] = useState('umbrella, frying pan, drawer, architecture textbook, kettle, electric fly swatter, cold medicine')
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [isAnalyzed, setIsAnalyzed] = useState(false)
+  
+  const [recognizedItems, setRecognizedItems] = useState<{name: string, category: string}[]>([])
+  const [rejectedItems, setRejectedItems] = useState<{name: string, reason: string}[]>([])
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
+  // API 호출 함수
+  const handleAnalyze = async (e: React.FormEvent) => {
+  e.preventDefault()
+  setIsAnalyzing(true)
+
+  // 1. 환경 변수 스위치 확인 (없으면 기본적으로 가짜 모드 작동)
+  const useMock = process.env.NEXT_PUBLIC_USE_MOCK_AI === 'true' || !process.env.NEXT_PUBLIC_USE_MOCK_AI
+
+  if (useMock) {
+    // --- 🎭 가짜 AI 모드 (비용 0원, 시연용) ---
+    await new Promise(resolve => setTimeout(resolve, 1500))
     
-    // (임시) 나중에 여기에 Supabase DB 저장 로직과 AI 파싱 로직이 들어갈 예정입니다.
-    setTimeout(() => {
-      alert('물품 등록이 완료되었습니다! (임시 테스트)')
-      setLoading(false)
-    }, 1000)
+    const mockData = {
+      recognized: [
+        { name: "Umbrella", category: "Accessories" },
+        { name: "Frying pan", category: "Kitchen" },
+        { name: "Drawer", category: "Furniture" },
+        { name: "Textbook", category: "Study" },
+        { name: "Kettle", category: "Electronics" },
+        { name: "Fly swatter", category: "Electronics" }
+      ],
+      rejected: [
+        { name: "Cold medicine", reason: "의약품 · 반입 불가" },
+        { name: "Knife", reason: "위험 물품 · 관리자 확인 필요" }
+      ]
+    }
+    setRecognizedItems(mockData.recognized)
+    setRejectedItems(mockData.rejected)
+  } else {
+    // --- 🧠 진짜 AI 모드 (나중에 크레딧 충전 후 사용) ---
+    try {
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: rawInput }),
+      })
+      
+      if (!res.ok) throw new Error('분석 실패')
+      
+      const data = await res.json()
+      setRecognizedItems(data.recognized)
+      setRejectedItems(data.rejected)
+    } catch (error) {
+      console.error(error)
+      alert("AI 분석 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.")
+    }
   }
+  
+  setIsAnalyzing(false)
+  setIsAnalyzed(true)
+}
 
   return (
-    <div className="max-w-2xl mx-auto py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-[#034159] mb-2">물품 등록하기 🛫</h1>
-        <p className="text-gray-500">떠나기 전, 다른 교환학생에게 물려줄 소중한 물품의 정보를 입력해주세요.</p>
+    <div className="max-w-3xl mx-auto py-12 px-4 font-sans">
+      <div className="mb-12">
+        <h1 className="text-4xl font-extrabold text-[#034159] mb-4">What will you put on the loop?</h1>
+        <p className="text-gray-500 text-lg">List everything you'd like to pass on, separated by commas.</p>
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex flex-col gap-6">
-        
-        {/* 사진 등록 (UI만 구현) */}
-        <div>
-          <label className="block text-sm font-bold text-gray-700 mb-2">물품 사진</label>
-          <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:bg-gray-50 transition-colors cursor-pointer">
-            <span className="text-4xl mb-2 block">📷</span>
-            <span className="text-sm text-gray-500">클릭하여 사진을 업로드하세요</span>
+      {!isAnalyzed ? (
+        <form onSubmit={handleAnalyze} className="space-y-6">
+          <div className="border-2 border-dashed border-gray-300 rounded-2xl p-8 bg-white focus-within:border-[#034159] transition-colors">
+            <textarea
+              className="w-full text-xl font-medium focus:outline-none resize-none"
+              rows={5}
+              value={rawInput}
+              onChange={(e) => setRawInput(e.target.value)}
+              placeholder="예: umbrella, desk lamp, winter coat..."
+            ></textarea>
           </div>
-        </div>
-
-        {/* 물품명 */}
-        <div>
-          <label className="block text-sm font-bold text-gray-700 mb-2">물품명</label>
-          <input
-            type="text"
-            required
-            placeholder="예: 이케아 탁상용 스탠드"
-            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#025951] focus:border-transparent transition-all"
-            value={formData.title}
-            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-6">
-          {/* 카테고리 */}
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">카테고리</label>
-            <select
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#025951] focus:border-transparent appearance-none bg-white"
-              value={formData.category}
-              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-            >
-              <option value="daily">생활용품</option>
-              <option value="electronics">소형 가전</option>
-              <option value="books">전공 서적</option>
-              <option value="clothing">의류/잡화</option>
-            </select>
+          <button type="submit" disabled={isAnalyzing} className="w-full bg-[#034159] hover:bg-[#022f42] text-white font-bold py-5 rounded-xl text-xl transition-colors">
+            {isAnalyzing ? "✨ AI Analyzing..." : "항목 분류하기"}
+          </button>
+        </form>
+      ) : (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          {/* 정상 품목 */}
+          <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+            <h3 className="text-xs font-bold text-gray-400 tracking-widest uppercase mb-4 text-left">Here's what we recognized</h3>
+            <div className="flex flex-wrap gap-3">
+              {recognizedItems.map((item, idx) => (
+                <div key={idx} className="bg-[#034159] text-white px-4 py-2 rounded-full text-sm font-medium">
+                  {item.name} <span className="opacity-60 ml-1 font-normal">· {item.category}</span>
+                </div>
+              ))}
+            </div>
           </div>
+          
+          {/* 금지 품목 필터링 결과 */}
+          {rejectedItems.length > 0 && (
+            <div className="bg-red-50 border border-red-100 rounded-2xl p-6 text-left shadow-sm">
+              <h3 className="text-xs font-bold text-red-500 tracking-widest uppercase mb-4">Cannot board the loop</h3>
+              <div className="space-y-2">
+                {rejectedItems.map((item, idx) => (
+                  <div key={idx} className="font-bold text-red-600 flex items-center gap-2">
+                    <span>⚠️</span> {item.name} <span className="text-sm font-normal text-red-400">({item.reason})</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
-          {/* 상태 등급 */}
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">상태 등급</label>
-            <select
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#025951] focus:border-transparent appearance-none bg-white"
-              value={formData.grade}
-              onChange={(e) => setFormData({ ...formData, grade: e.target.value })}
-            >
-              <option value="S">S등급 (미개봉/새것)</option>
-              <option value="A">A등급 (사용감 적음)</option>
-              <option value="B">B등급 (사용감 있음)</option>
-            </select>
-          </div>
+          <button onClick={() => setIsAnalyzed(false)} className="mt-8 text-[#034159] font-bold underline underline-offset-4">
+            ← 다시 입력하기
+          </button>
         </div>
-
-        {/* 상세 설명 */}
-        <div>
-          <label className="block text-sm font-bold text-gray-700 mb-2">상세 설명</label>
-          <textarea
-            required
-            rows={4}
-            placeholder="구입 시기, 사용감, 특이사항 등을 자세히 적어주세요."
-            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#025951] focus:border-transparent transition-all resize-none"
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-          ></textarea>
-        </div>
-
-        {/* 제출 버튼 */}
-        <button
-          type="submit"
-          disabled={loading}
-          className="mt-4 w-full bg-[#025951] hover:bg-[#034159] text-white font-bold py-4 rounded-xl transition-colors"
-        >
-          {loading ? '등록 중...' : '물품 등록하기'}
-        </button>
-      </form>
+      )}
     </div>
   )
 }
