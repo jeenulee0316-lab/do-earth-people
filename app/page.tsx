@@ -32,7 +32,13 @@ export default function Onboarding() {
       return
     }
 
-    // 3. 환영 알림창 표시
+    // 3. 선택한 역할을 브라우저 localStorage에 기억시켜둠
+    //    - 마이페이지(/mypage)에서 이 값을 읽어 "양도자 뷰" / "양수자 뷰"를 분기 렌더링.
+    //    - localStorage는 브라우저에 영구 저장되므로, 다음에 다시 들어와도 유지됨.
+    //    - 같은 키를 매번 덮어쓰니까, 사용자가 역할을 바꾸면 그 값이 곧바로 갱신돼요.
+    localStorage.setItem('onloop_role', role)
+
+    // 4. 환영 알림창 표시
     //    alert()은 동기 함수라서, 사용자가 "확인"을 누르기 전까지 다음 줄이 실행되지 않아.
     //    즉, 아래 router.push()는 알림창을 닫은 "직후"에 실행돼.
     alert(role === 'donor' ? '양도자로 환영합니다! 🛫' : '양수자로 환영합니다! 🛬')

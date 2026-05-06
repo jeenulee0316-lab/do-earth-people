@@ -45,6 +45,17 @@ export default function Header() {
               ◆ {credits}
             </div>
           )}
+
+          {/* 마이페이지 링크 — 로그아웃 바로 왼쪽에 배치.
+              로그아웃은 "동작"이라 텍스트만, 마이페이지는 "페이지 이동"이라
+              옅은 회색 배경 알약(pill)으로 살짝 구분해 줌 (너무 튀지 않게). */}
+          <Link
+            href="/mypage"
+            className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-full text-sm font-medium transition-colors"
+          >
+            마이페이지
+          </Link>
+
           <button onClick={handleLogout} className="text-sm text-gray-500 hover:text-gray-800 transition-colors">
             로그아웃
           </button>
