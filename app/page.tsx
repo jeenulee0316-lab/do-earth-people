@@ -1,14 +1,16 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation' // 페이지 이동을 위한 Next.js 라우터
 import { supabase } from '@/lib/supabase'
 
 export default function Onboarding() {
   const [loading, setLoading] = useState(false)
+  const router = useRouter() // 역할 선택 후 다른 페이지로 보낼 때 사용
 
   const selectRole = async (role: 'donor' | 'recipient') => {
     setLoading(true)
-    
+
     // 1. 현재 접속한 유저 정보 확인
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -26,10 +28,22 @@ export default function Onboarding() {
 
     if (error) {
       alert('오류가 발생했습니다: ' + error.message)
-    } else {
-      alert(role === 'donor' ? '양도자로 환영합니다! 🛫' : '양수자로 환영합니다! 🛬')
-      // 역할 선택 완료 시 대시보드로 이동하는 로직이 향후 추가될 예정입니다.
+      setLoading(false)
+      return
     }
+
+    // 3. 환영 알림창 표시
+    //    alert()은 동기 함수라서, 사용자가 "확인"을 누르기 전까지 다음 줄이 실행되지 않아.
+    //    즉, 아래 router.push()는 알림창을 닫은 "직후"에 실행돼.
+    alert(role === 'donor' ? '양도자로 환영합니다! 🛫' : '양수자로 환영합니다! 🛬')
+
+    // 4. 역할별로 다음 화면으로 자동 이동
+    //    - 양도자(donor): 방금 만든 물품 등록 페이지로 이동
+    //    - 양수자(recipient): 아직 대시보드가 없으니 일단 메인에 머무름 (추후 연결 예정)
+    if (role === 'donor') {
+      router.push('/donor/new')
+    }
+
     setLoading(false)
   }
 
