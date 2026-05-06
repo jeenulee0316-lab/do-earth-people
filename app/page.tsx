@@ -38,10 +38,12 @@ export default function Onboarding() {
     alert(role === 'donor' ? '양도자로 환영합니다! 🛫' : '양수자로 환영합니다! 🛬')
 
     // 4. 역할별로 다음 화면으로 자동 이동
-    //    - 양도자(donor): 방금 만든 물품 등록 페이지로 이동
-    //    - 양수자(recipient): 아직 대시보드가 없으니 일단 메인에 머무름 (추후 연결 예정)
+    //    - 양도자(donor)    : 물품 등록 페이지로 이동 (내 짐을 올리는 흐름)
+    //    - 양수자(recipient): 물품 탐색 페이지로 이동 (남이 올린 짐을 둘러보는 흐름)
     if (role === 'donor') {
       router.push('/donor/new')
+    } else {
+      router.push('/receiver/explore')
     }
 
     setLoading(false)
