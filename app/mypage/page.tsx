@@ -211,6 +211,60 @@ export default function MyPage() {
     setReservedRows(rows)
   }
 
+  // ─────────────────────────────────────────────────────────────
+  // ❌ 예약 취소 (양수자 전용)
+  //
+  // 비전공자 팀원을 위한 설명:
+  // ─────────────────────────────────
+  // reservations 테이블의 한 줄(row) = "이 물건은 누가 예약했다"는 한 건의 약속이에요.
+  // 따라서 이 한 줄을 DELETE 로 지우면, 시스템 입장에서는
+  // "그 물건은 이제 아무도 예약하지 않은 상태"로 자동으로 돌아갑니다.
+  //
+  // 우리 앱의 다른 화면들은 모두 이 reservations 테이블을 기준으로
+  // "예약 완료/예약 가능" 여부를 그리고 있어요:
+  //   • /receiver/explore       → 카드에 회색 '예약 완료' 배지를 띄울지 결정
+  //   • /receiver/explore/:id   → 상세 페이지에서 '예약하기' 버튼을 잠글지 결정
+  //   • /mypage (양도자 뷰)      → 내 물품에 '예약 완료' 표시를 띄울지 결정
+  //
+  // 그래서 이 한 줄을 지우는 순간, 위 화면들 어디서든 그 물건은
+  // 다시 회색 배지가 사라지고 누구나 예약할 수 있는 상태로 자연스럽게 돌아갑니다.
+  // (각 페이지가 reservations 테이블을 다시 읽을 때 자동 반영 — 별도 처리 불필요)
+  //
+  // 안전장치: 다른 사람의 예약을 실수로 지우면 안 되므로
+  // 반드시 item_id 와 내 user_id 두 조건을 모두 만족하는 줄만 삭제합니다.
+  // ─────────────────────────────────────────────────────────────
+  const handleCancelReservation = async (
+    reservationId: number | string,
+    itemId: number | string,
+  ) => {
+    // 실수 클릭 방지용 한 단계 확인
+    if (!window.confirm('이 물품의 예약을 취소할까요?')) return
+
+    // 현재 로그인한 사용자 정보 다시 확인 (세션이 만료됐을 수도 있어서)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      router.push('/login')
+      return
+    }
+
+    // reservations 테이블에서 "이 물품 + 내가 만든 예약" 조건의 줄 삭제
+    const { error } = await supabase
+      .from('reservations')
+      .delete()
+      .eq('item_id', itemId)
+      .eq('user_id', user.id)
+
+    if (error) {
+      console.error('[mypage:cancel] error', error)
+      alert('예약 취소 중 문제가 발생했어요. 잠시 후 다시 시도해주세요.')
+      return
+    }
+
+    // 화면 즉시 반영: 마이페이지 목록에서 방금 취소한 카드를 빼버림.
+    // (서버 재요청 없이 바로 사라지게 만들어 사용자가 빠르게 결과를 체감하도록)
+    setReservedRows(prev => prev.filter(r => r.reservationId !== reservationId))
+  }
+
   // ── 로딩 중 화면 ────────────────────────────────────────────
   if (loading) {
     return (
@@ -252,7 +306,7 @@ export default function MyPage() {
       {role === 'donor' ? (
         <DonorView items={donorItems} />
       ) : (
-        <ReceiverView rows={reservedRows} />
+        <ReceiverView rows={reservedRows} onCancel={handleCancelReservation} />
       )}
     </div>
   )
@@ -332,7 +386,18 @@ function DonorView({ items }: { items: DonorItem[] }) {
 // 양수자(recipient) 뷰 — 내가 예약한 물품 그리드
 // 카드를 클릭하면 해당 물품의 상세 페이지로 다시 들어갈 수 있게 Link 처리.
 // ═════════════════════════════════════════════════════════════════
-function ReceiverView({ rows }: { rows: ReservedRow[] }) {
+function ReceiverView({
+  rows,
+  onCancel,
+}: {
+  rows: ReservedRow[]
+  // 부모(MyPage)가 내려주는 "예약 취소" 동작.
+  // 어떤 예약(reservationId)을 지울지, 그리고 그 예약이 어떤 물품(itemId)에 걸려 있는지를 함께 넘김.
+  onCancel: (reservationId: number | string, itemId: number | string) => void | Promise<void>
+}) {
+  // 어느 카드의 취소가 진행 중인지 (네트워크 응답을 기다리는 동안 더블클릭 방지용)
+  const [cancellingId, setCancellingId] = useState<number | string | null>(null)
+
   if (rows.length === 0) {
     return (
       <EmptyState
@@ -343,6 +408,19 @@ function ReceiverView({ rows }: { rows: ReservedRow[] }) {
         ctaLabel="물품 탐색하러 가기"
       />
     )
+  }
+
+  // 버튼 클릭 핸들러 — 부모 onCancel을 호출하면서 진행 상태 플래그를 켰다 끔
+  const handleCancelClick = async (
+    reservationId: number | string,
+    itemId: number | string,
+  ) => {
+    setCancellingId(reservationId)
+    try {
+      await onCancel(reservationId, itemId)
+    } finally {
+      setCancellingId(null)
+    }
   }
 
   return (
@@ -358,29 +436,50 @@ function ReceiverView({ rows }: { rows: ReservedRow[] }) {
           day:   'numeric',
         })
 
-        return (
-          <Link
-            key={reservationId}
-            href={`/receiver/explore/${item.id}`}
-            className="group block bg-white border border-gray-200 rounded-2xl overflow-hidden hover:border-[#034159] hover:shadow-md transition-all"
-          >
-            <div className="relative aspect-square bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
-              <span className="text-6xl group-hover:scale-110 transition-transform">
-                {icon}
-              </span>
-              <span className={`absolute top-3 right-3 px-2.5 py-1 rounded-full text-xs font-bold ${gradeClass}`}>
-                {item.grade}급
-              </span>
-            </div>
+        const isCancelling = cancellingId === reservationId
 
-            <div className="p-4">
-              <h2 className="font-bold text-[#034159] text-base leading-tight truncate">
-                {item.name}
-              </h2>
-              <p className="text-xs text-gray-500 mt-1">{item.category}</p>
-              <p className="text-xs text-gray-400 mt-3">예약일 · {reservedAtLabel}</p>
+        return (
+          // 카드 한 장 = "상단(상세 페이지로 이동하는 링크)" + "하단(예약 취소 버튼)"
+          // 버튼을 Link 안에 넣으면 클릭이 두 동작(이동 + 취소)으로 충돌하기 때문에
+          // article 안에 Link와 button을 형제(sibling)로 두어 영역을 분리했어요.
+          <article
+            key={reservationId}
+            className="group flex flex-col bg-white border border-gray-200 rounded-2xl overflow-hidden hover:border-[#034159] hover:shadow-md transition-all"
+          >
+            <Link href={`/receiver/explore/${item.id}`} className="block">
+              <div className="relative aspect-square bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+                <span className="text-6xl group-hover:scale-110 transition-transform">
+                  {icon}
+                </span>
+                <span className={`absolute top-3 right-3 px-2.5 py-1 rounded-full text-xs font-bold ${gradeClass}`}>
+                  {item.grade}급
+                </span>
+              </div>
+
+              <div className="px-4 pt-4">
+                <h2 className="font-bold text-[#034159] text-base leading-tight truncate">
+                  {item.name}
+                </h2>
+                <p className="text-xs text-gray-500 mt-1">{item.category}</p>
+                <p className="text-xs text-gray-400 mt-3">예약일 · {reservedAtLabel}</p>
+              </div>
+            </Link>
+
+            {/* ── 예약 취소 버튼 ──────────────────────────────────
+                빨간색 계열의 outline 버튼.
+                강한 빨강 배경 대신 가벼운 테두리+텍스트 색상으로 처리해
+                "되돌릴 수 있는 동작"임을 인지시키되 시각적 부담은 줄였어요. */}
+            <div className="px-4 pt-3 pb-4 mt-auto">
+              <button
+                type="button"
+                onClick={() => handleCancelClick(reservationId, item.id)}
+                disabled={isCancelling}
+                className="w-full text-sm font-bold border border-red-200 text-red-500 hover:bg-red-50 hover:border-red-300 rounded-xl py-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isCancelling ? '취소 중...' : '예약 취소'}
+              </button>
             </div>
-          </Link>
+          </article>
         )
       })}
     </div>
