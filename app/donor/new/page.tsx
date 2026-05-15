@@ -2,7 +2,21 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import Image from 'next/image'
 import { supabase } from '@/lib/supabase'
+
+// ─────────────────────────────────────────────────────────────────
+// 📸 이미지 업로드 정책
+//  - 1장 최대 5MB까지 (서버 비용/UX 균형)
+//  - jpg / png / webp / gif만 허용 (HEIC 등은 모바일에서 호환 이슈)
+//  - 저장 경로: item-images/items/[timestamp]-[랜덤]-[원본파일명]
+//    예) items/1715162400000-3b9q-frying_pan.jpg
+//    아직 DB에 INSERT되기 전이라 item.id를 알 수 없으므로 timestamp+랜덤으로 충돌 방지.
+// ─────────────────────────────────────────────────────────────────
+const STORAGE_BUCKET = 'item-images'
+const MAX_FILE_BYTES = 5 * 1024 * 1024
+const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 
 // ─────────────────────────────────────────────────────────────────
 // 물품 상태 등급(Condition Grade) 정의
@@ -25,12 +39,48 @@ type Grade = typeof GRADE_OPTIONS[number]['value']
 type RecognizedItem = {
   name: string
   category: string
-  grade: Grade // 사용자가 선택한 상태 등급. 기본값은 'A'로 시작.
+  grade: Grade        // 사용자가 선택한 상태 등급. 기본값은 'A'로 시작.
+  imageUrl?: string   // Supabase Storage 업로드 후 받은 공개 URL (없으면 이모지 폴백)
+  isUploading?: boolean // 업로드 진행 중 표시용 (스피너/잠금)
 }
 
 export default function OffloadList() {
   // 페이지 이동(메인으로 보내기)에 사용할 라우터 객체
   const router = useRouter()
+
+  // ─────────────────────────────────────────────────────────────
+  // 🔐 학생 인증 게이팅
+  // ─────────────────────────────────────────────────────────────
+  // 물품 등록은 "확인된 캠퍼스 구성원"만 가능해야 신뢰가 유지돼요.
+  // 페이지가 켜질 때 profiles.is_verified 값을 한 번 읽어 와서
+  //   - true  → 그대로 본문 진행
+  //   - false → 본문 위에 차단용 모달 표시 + /verify로 안내
+  // verifyState는 깜빡임 방지를 위해 'loading' 상태를 명시적으로 둡니다.
+  const [verifyState, setVerifyState] = useState<'loading' | 'verified' | 'unverified'>('loading')
+
+  useEffect(() => {
+    const checkVerification = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        router.push('/login')
+        return
+      }
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('is_verified')
+        .eq('id', user.id)
+        .single()
+
+      if (error) {
+        // 프로필 조회 실패는 보수적으로 '미인증'으로 처리해 사용자가 강제 우회하지 못하게 함
+        console.error('[donor/new] profile fetch error', error)
+        setVerifyState('unverified')
+        return
+      }
+      setVerifyState(data?.is_verified ? 'verified' : 'unverified')
+    }
+    checkVerification()
+  }, [router])
 
   // ── 입력/플로우 관련 상태 ─────────────────────────────────────
   const [rawInput, setRawInput] = useState('umbrella, frying pan, drawer, architecture textbook, kettle, electric fly swatter, cold medicine')
@@ -71,6 +121,74 @@ export default function OffloadList() {
   }
 
   // ─────────────────────────────────────────────────────────────────
+  // 🖼️ 이미지 업로드 핸들러
+  //
+  // 흐름:
+  //   1) 사용자가 파일을 고르면 (input[type="file"] onChange)
+  //   2) 용량/형식을 먼저 검사하고, 문제 없으면 업로드 시작 (해당 항목만 isUploading=true)
+  //   3) 'item-images' 버킷의 items/[타임스탬프]-[랜덤]-[파일명] 경로로 저장
+  //      → 이름 충돌을 막기 위해 타임스탬프+짧은 랜덤 문자열을 앞에 붙임
+  //   4) 업로드 성공 → 공개 URL을 받아 imageUrl 상태에 저장 (UI에 즉시 썸네일 표시)
+  //   5) 실패 시 alert로 알리고 isUploading만 풀어줌
+  // ─────────────────────────────────────────────────────────────────
+  const handleImageUpload = async (idx: number, file: File) => {
+    // ── 사전 검사: 크기/형식 ───────────────────────────────────
+    if (!ALLOWED_MIME.includes(file.type)) {
+      alert('JPG / PNG / WEBP / GIF 형식의 이미지만 올릴 수 있어요.')
+      return
+    }
+    if (file.size > MAX_FILE_BYTES) {
+      alert('파일이 너무 커요. 5MB 이하의 이미지를 사용해 주세요.')
+      return
+    }
+
+    // ── 업로드 시작 표시 (해당 항목만) ───────────────────────
+    setRecognizedItems(prev =>
+      prev.map((it, i) => (i === idx ? { ...it, isUploading: true } : it))
+    )
+
+    // ── 안전한 파일 경로 만들기 ────────────────────────────────
+    //   원본 이름엔 한글/공백/특수문자가 있을 수 있어 URL 친화적으로 가공한다.
+    const ext = file.name.includes('.') ? file.name.split('.').pop() : ''
+    const baseName = file.name
+      .replace(/\.[^.]+$/, '')         // 확장자 제거
+      .replace(/[^a-zA-Z0-9._-]/g, '_') // 안전 문자만 남김
+      .slice(0, 40)                    // 너무 긴 이름 방지
+    const rand = Math.random().toString(36).slice(2, 8)
+    const path = `items/${Date.now()}-${rand}-${baseName}${ext ? '.' + ext : ''}`
+
+    // ── Supabase Storage 업로드 ────────────────────────────────
+    const { error: uploadError } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .upload(path, file, {
+        cacheControl: '3600',
+        upsert: false,
+        contentType: file.type,
+      })
+
+    if (uploadError) {
+      // 업로드 실패 → 상태 복구하고 사용자에게 알림
+      setRecognizedItems(prev =>
+        prev.map((it, i) => (i === idx ? { ...it, isUploading: false } : it))
+      )
+      alert('이미지 업로드 중 문제가 발생했어요: ' + uploadError.message)
+      return
+    }
+
+    // ── 업로드된 파일의 공개 URL 받아오기 ─────────────────────
+    //   버킷이 public이어야 이 URL이 그대로 브라우저에서 열림.
+    const { data: { publicUrl } } = supabase.storage
+      .from(STORAGE_BUCKET)
+      .getPublicUrl(path)
+
+    setRecognizedItems(prev =>
+      prev.map((it, i) =>
+        i === idx ? { ...it, isUploading: false, imageUrl: publicUrl } : it
+      )
+    )
+  }
+
+  // ─────────────────────────────────────────────────────────────────
   // "순환 시작하기" 버튼 클릭 시 실행되는 함수
   //
   // 흐름:
@@ -104,10 +222,11 @@ export default function OffloadList() {
     //    화면 상태(recognizedItems)는 UI 편의용 데이터일 뿐,
     //    DB 컬럼명(user_id, name, category, grade)에 맞춰 새로 만들어줘야 한다.
     const rowsToInsert = recognizedItems.map(item => ({
-      user_id:  user.id,        // "이 물품은 누가 등록했는가" — Supabase Auth가 발급한 고유 ID
-      name:     item.name,      // 물품 이름 (예: "Umbrella")
-      category: item.category,  // AI가 분류한 카테고리 (예: "Kitchen")
-      grade:    item.grade,     // 사용자가 드롭다운으로 고른 상태 등급 (S/A/B)
+      user_id:   user.id,        // "이 물품은 누가 등록했는가" — Supabase Auth가 발급한 고유 ID
+      name:      item.name,      // 물품 이름 (예: "Umbrella")
+      category:  item.category,  // AI가 분류한 카테고리 (예: "Kitchen")
+      grade:     item.grade,     // 사용자가 드롭다운으로 고른 상태 등급 (S/A/B)
+      image_url: item.imageUrl ?? null, // 사진을 안 올렸다면 null로 저장 → 표시 시 이모지 폴백
     }))
 
     // 3) 'items' 테이블에 한꺼번에 INSERT
@@ -188,7 +307,11 @@ export default function OffloadList() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto py-12 px-4 font-sans">
+    <div className="max-w-3xl mx-auto py-12 px-4 font-sans relative">
+      {/* 미인증 사용자에게는 본문 위에 차단 모달을 띄움.
+          (본문은 뒤에 그대로 렌더되어 "어떤 페이지였는지" 미리보기 역할까지 겸함) */}
+      {verifyState === 'unverified' && <VerificationRequiredModal />}
+
       <div className="mb-12">
         <h1 className="text-4xl font-extrabold text-[#034159] mb-4">What will you put on the loop?</h1>
         <p className="text-gray-500 text-lg">List everything you'd like to pass on, separated by commas.</p>
@@ -228,11 +351,23 @@ export default function OffloadList() {
                 const isOpen = openIdx === idx
 
                 return (
-                  <li key={idx} className="flex items-center justify-between py-3">
-                    {/* 왼쪽: 물품 이름 + 카테고리 */}
-                    <div className="flex flex-col">
-                      <span className="font-semibold text-[#034159]">{item.name}</span>
-                      <span className="text-xs text-gray-500">{item.category}</span>
+                  <li key={idx} className="flex items-center gap-4 py-3">
+                    {/* ── 왼쪽: 사진 썸네일 / 업로드 영역 ────────
+                        - 비어있을 땐 점선 dashed 셀 + 카메라 아이콘 (Mintlify의 dashed empty 패턴)
+                        - 업로드 중엔 작은 스피너
+                        - 사진이 있으면 next/image로 cover 표시 (재선택 가능) */}
+                    <ItemImageCell
+                      idx={idx}
+                      itemName={item.name}
+                      imageUrl={item.imageUrl}
+                      isUploading={item.isUploading}
+                      onSelectFile={file => handleImageUpload(idx, file)}
+                    />
+
+                    {/* 가운데: 물품 이름 + 카테고리 (남는 공간을 채움) */}
+                    <div className="flex flex-col flex-1 min-w-0">
+                      <span className="font-semibold text-ink text-[15px] truncate">{item.name}</span>
+                      <span className="text-[13px] text-steel">{item.category}</span>
                     </div>
 
                     {/* 오른쪽: 등급 선택 드롭다운 */}
@@ -333,6 +468,169 @@ export default function OffloadList() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ═════════════════════════════════════════════════════════════════
+// 📷 ItemImageCell — 항목별 사진 업로드 셀
+// ─────────────────────────────────────────────────────────────────
+// 한 줄에 자리 잡는 56x56 셀. 세 가지 상태가 있어요:
+//
+//   1) 비어있음(empty)   — 점선 hairline 셀 + 카메라 아이콘
+//                         hover 시 mint 강조 → "여기 누르면 사진 추가"
+//   2) 업로드 중(uploading) — 작은 회전 스피너로 진행 표시
+//   3) 채워짐(filled)    — next/image로 채워진 썸네일 + hover 시 "변경" 힌트
+//
+// 구현 팁:
+//   - <input type="file">을 시각적으로 숨기고 <label>로 감싸 클릭 영역으로 사용.
+//     → 이렇게 하면 셀 어디를 눌러도 파일 선택창이 뜸 (접근성 OK)
+//   - 같은 파일을 다시 고를 수도 있어야 하므로 onChange 후엔 input.value를 비워줌.
+// ═════════════════════════════════════════════════════════════════
+function ItemImageCell({
+  idx,
+  itemName,
+  imageUrl,
+  isUploading,
+  onSelectFile,
+}: {
+  idx: number
+  itemName: string
+  imageUrl?: string
+  isUploading?: boolean
+  onSelectFile: (file: File) => void
+}) {
+  // 파일 input의 id — 각 셀마다 유일해야 label-for 매칭이 정확함.
+  const inputId = `onloop-item-image-${idx}`
+
+  return (
+    <label
+      htmlFor={inputId}
+      className={`
+        relative shrink-0 w-14 h-14 rounded-lg overflow-hidden cursor-pointer
+        flex items-center justify-center transition-all
+        ${imageUrl
+          ? 'border border-hairline hover:border-mint'
+          : 'border-2 border-dashed border-hairline bg-surface-soft hover:border-mint hover:bg-mint-tint'
+        }
+        ${isUploading ? 'pointer-events-none' : ''}
+      `}
+      aria-label={`${itemName} 사진 추가`}
+    >
+      {/* 채워짐: 업로드된 이미지 썸네일 */}
+      {imageUrl && !isUploading && (
+        <Image
+          src={imageUrl}
+          alt={itemName}
+          fill
+          sizes="56px"
+          className="object-cover"
+        />
+      )}
+
+      {/* 업로드 중: 회전 스피너 */}
+      {isUploading && (
+        <svg
+          className="w-5 h-5 animate-spin text-mint-deep"
+          viewBox="0 0 24 24"
+          fill="none"
+          aria-hidden
+        >
+          <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" opacity="0.25" />
+          <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      )}
+
+      {/* 비어있음: 카메라 아이콘 */}
+      {!imageUrl && !isUploading && (
+        <svg
+          className="w-5 h-5 text-steel"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          aria-hidden
+        >
+          <path strokeLinecap="round" strokeLinejoin="round"
+                d="M3 8.5A2 2 0 0 1 5 6.5h2.6l1.3-1.7A2 2 0 0 1 10.5 4h3a2 2 0 0 1 1.6.8l1.3 1.7H19a2 2 0 0 1 2 2v8.5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-8.5Z" />
+          <circle cx="12" cy="12.5" r="3.2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
+
+      {/* 실제 파일 input — 시각적으로 숨김 (label이 트리거 역할) */}
+      <input
+        id={inputId}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        className="sr-only"
+        onChange={e => {
+          const file = e.target.files?.[0]
+          if (file) onSelectFile(file)
+          // 같은 파일을 다시 고를 수 있도록 input value 비우기
+          e.target.value = ''
+        }}
+      />
+    </label>
+  )
+}
+
+// ═════════════════════════════════════════════════════════════════
+// 🔒 인증 필수 모달 — 미인증 사용자에게 띄우는 차단 오버레이
+// ─────────────────────────────────────────────────────────────────
+// 본문 위에 반투명 백드롭 + 가운데 정렬된 카드를 깔아서
+// "지금은 등록할 수 없다"는 사실을 분명히 보여줘요.
+// CTA는 /verify 페이지로 안내하는 검은 알약 버튼(button-primary).
+// 보조 액션으로 "홈으로 돌아가기" 텍스트 링크를 함께 둡니다.
+// ═════════════════════════════════════════════════════════════════
+function VerificationRequiredModal() {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="verify-required-title"
+      className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-ink/40 backdrop-blur-sm animate-in fade-in duration-200"
+    >
+      <div className="w-full max-w-md bg-canvas border border-hairline rounded-2xl p-8 shadow-[0_20px_60px_rgba(10,10,10,0.18)] animate-in zoom-in-95 duration-200">
+        {/* 아이콘 패치 — 민트 틴트 원형 (브랜드 액센트 자리) */}
+        <div className="w-12 h-12 rounded-full bg-mint-tint flex items-center justify-center text-[20px] mb-5">
+          🔒
+        </div>
+
+        {/* 마이크로 라벨 */}
+        <p className="text-[11px] font-semibold tracking-[0.5px] uppercase text-mint-deep mb-2">
+          Verification Required
+        </p>
+
+        {/* 헤드라인 */}
+        <h2
+          id="verify-required-title"
+          className="text-[24px] font-semibold text-ink leading-[1.25] tracking-[-0.3px] mb-3"
+        >
+          물품을 등록하려면 학생 인증이 필요해요
+        </h2>
+
+        {/* 본문 설명 */}
+        <p className="text-[15px] leading-[1.6] text-steel mb-7">
+          Onloop은 연세대 캠퍼스 안에서만 도는 신뢰 기반 서비스예요.
+          연세대 이메일이나 입학 서류로 인증을 마치면, 바로 물품을 올릴 수 있어요.
+        </p>
+
+        {/* 액션 — 메인 CTA(검은 알약) + 보조 텍스트 링크 */}
+        <div className="flex flex-col gap-3">
+          <Link
+            href="/verify"
+            className="inline-flex items-center justify-center h-11 px-6 rounded-full bg-ink text-canvas text-[14px] font-medium hover:bg-charcoal transition-colors"
+          >
+            지금 인증하러 가기 →
+          </Link>
+          <Link
+            href="/"
+            className="inline-flex items-center justify-center h-10 text-[13px] font-medium text-stone hover:text-ink transition-colors"
+          >
+            나중에 할게요
+          </Link>
+        </div>
+      </div>
     </div>
   )
 }

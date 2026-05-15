@@ -1,1 +1,58 @@
 @import "tailwindcss";
+
+/* ──────────────────────────────────────────────────────────────────
+   🎨 Onloop 디자인 토큰 (Mintlify 디자인 시스템 기반)
+   ──────────────────────────────────────────────────────────────────
+   이 블록은 Tailwind v4의 @theme 기능으로,
+   "이 사이트가 쓸 색·폰트·반경"을 한 곳에 모아 둔 변수 모음이에요.
+
+   여기서 정의한 이름은 그대로 클래스로 쓸 수 있어요.
+     예) --color-mint  →  className="bg-mint" / "text-mint" / "border-mint"
+         --color-ink   →  className="text-ink"
+
+   덕분에 페이지마다 다른 hex 코드를 외우지 않아도 되고,
+   브랜드 색을 한 번 바꾸면 사이트 전체가 함께 바뀝니다.
+   ────────────────────────────────────────────────────────────────── */
+@theme {
+  /* ── 브랜드 그린 (액센트로만 절제해서 사용) ── */
+  --color-mint:        #00d4a4;   /* 시그니처 민트 — CTA, 활성 상태 */
+  --color-mint-deep:   #00b48a;   /* 눌렸을 때 / 진한 텍스트 강조 */
+  --color-mint-soft:   #7cebcb;   /* 가벼운 보조 톤 */
+  --color-mint-tint:   #ecfbf5;   /* 성공·강조 표면용 옅은 배경 */
+
+  /* ── 잉크/텍스트 8단계 (의미 단계별로 점점 흐려짐) ── */
+  --color-ink:      #0a0a0a;      /* 가장 진한 텍스트 (헤드라인, CTA) */
+  --color-charcoal: #1c1c1e;      /* 본문 텍스트 */
+  --color-slate:    #3a3a3c;      /* 보조 텍스트 */
+  --color-steel:    #5a5a5c;      /* 부가 정보, 사이드 네비 */
+  --color-stone:    #888888;      /* 캡션, 옅은 라벨 */
+  --color-muted:    #a8a8aa;      /* 비활성/희미한 텍스트 */
+
+  /* ── 표면 색 (배경 단계) ── */
+  --color-canvas:        #ffffff;
+  --color-canvas-dark:   #0a0a0a;
+  --color-surface:       #f7f7f7;   /* 코드블록·카드 보조 배경 */
+  --color-surface-soft:  #fafafa;   /* 더 옅은 배경 */
+  --color-hairline:      #e5e5e5;   /* 1px 경계선의 기본값 */
+  --color-hairline-soft: #ededed;   /* 더 옅은 경계선 */
+
+  /* ── 시맨틱 (경고·오류 등) ── */
+  --color-warn:  #c37d0d;
+  --color-error: #d45656;
+  --color-tag:   #3772cf;
+
+  /* ── 타이포그래피: Inter를 본문 폰트로 사용 ── */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+               'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+}
+
+/* 본문 기본값 — 읽기 편한 16px / 1.5 줄간격, 안티앨리어싱 */
+html,
+body {
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-feature-settings: 'cv11', 'ss01';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
