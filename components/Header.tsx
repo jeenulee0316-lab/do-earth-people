@@ -19,6 +19,8 @@ export default function Header() {
   // 로그인 여부 — null 은 "아직 확인 전" 상태이므로 버튼을 비워두고 깜빡임을 방지합니다.
   const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null)
   const [credits, setCredits] = useState<number | null>(null)
+  // 관리자 여부 — profiles.role 이 'admin' 일 때만 헤더에 'Admin' 링크를 노출합니다.
+  const [isAdmin, setIsAdmin] = useState(false)
   const router = useRouter()
 
   // Header 네임스페이스 번역 — messages/{locale}.json 의 "Header" 키 아래를 읽어옵니다.
@@ -27,15 +29,18 @@ export default function Header() {
   // 화면이 켜질 때 Supabase 세션을 확인하고, 로그인 상태라면 크레딧도 함께 불러옵니다.
   // 또한 onAuthStateChange 를 구독해 로그인/로그아웃 즉시 헤더가 반응하도록 합니다.
   useEffect(() => {
-    // 프로필(크레딧) 조회 — 로그인된 사용자에 한해 호출
-    const fetchCredits = async (userId: string) => {
+    // 프로필 조회 — 로그인된 사용자의 크레딧 + 권한(role)을 한 번에 가져옵니다.
+    const fetchProfile = async (userId: string) => {
       const { data } = await supabase
         .from('profiles')
-        .select('credits')
+        .select('credits, role')
         .eq('id', userId)
         .single()
 
-      if (data) setCredits(data.credits)
+      if (data) {
+        setCredits(data.credits)
+        setIsAdmin(data.role === 'admin')
+      }
     }
 
     // 초기 세션 확인
@@ -43,10 +48,11 @@ export default function Header() {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         setIsLoggedIn(true)
-        await fetchCredits(user.id)
+        await fetchProfile(user.id)
       } else {
         setIsLoggedIn(false)
         setCredits(null)
+        setIsAdmin(false)
       }
     }
     init()
@@ -55,10 +61,11 @@ export default function Header() {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setIsLoggedIn(true)
-        fetchCredits(session.user.id)
+        fetchProfile(session.user.id)
       } else {
         setIsLoggedIn(false)
         setCredits(null)
+        setIsAdmin(false)
       }
     })
 
@@ -114,6 +121,17 @@ export default function Header() {
                   <span aria-hidden>◆</span>
                   <span>{credits}</span>
                 </div>
+              )}
+
+              {/* 관리자 전용 — role='admin' 인 사용자에게만 보이는 운영 대시보드 링크.
+                  민트 틴트 알약으로 일반 메뉴와 살짝 구분해, 운영자가 바로 알아보게 함. */}
+              {isAdmin && (
+                <Link
+                  href="/admin"
+                  className="inline-flex items-center h-9 px-4 rounded-full bg-mint-tint text-mint-deep text-[14px] font-semibold hover:bg-mint/20 transition-colors"
+                >
+                  {t('admin')}
+                </Link>
               )}
 
               {/* 마이페이지 — button-secondary: 투명 + hairline 알약 */}
