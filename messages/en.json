@@ -1,0 +1,67 @@
+{
+  "Home": {
+    "welcome": "WELCOME TO ONLOOP",
+    "title": "Choose Your Role",
+    "subtitle": "Select your role in the Onloop ecosystem. You can always change it later in My Loop.",
+    "roleDonorTitle": "Sharer (Donor)",
+    "roleDonorDesc": "Leaving soon and need to clear out? Donate your items and help reduce campus waste.",
+    "roleReceiverTitle": "Receiver",
+    "roleReceiverDesc": "Just arrived in Korea? Save on settling-in costs and get the essentials using credits.",
+    "btnSelect": "Select →",
+    "btnLoading": "Loading...",
+    "alertNeedLogin": "You need to sign in to use this service. Redirecting to the sign-in page.",
+    "alertError": "An error occurred: ",
+    "alertWelcomeDonor": "Welcome aboard as a Sharer! 🛫",
+    "alertWelcomeReceiver": "Welcome aboard as a Receiver! 🛬"
+  },
+  "Header": {
+    "explore": "Find & Loop",
+    "upload": "Share to Loop",
+    "mypage": "My Loop",
+    "login": "Sign In",
+    "logout": "Sign Out"
+  },
+  "Explore": {
+    "title": "Waiting for a New Home",
+    "categoryAll": "All Items",
+    "categoryElectronics": "Electronics",
+    "categoryBooks": "Books",
+    "categoryClothing": "Clothing",
+    "categoryOthers": "Living & Others",
+    "statusAvailable": "Available",
+    "statusReserved": "Reserved",
+    "statusStored": "At Storage",
+    "statusCompleted": "Looped"
+  },
+  "Detail": {
+    "conditionS": "Like New",
+    "conditionA": "Great Condition",
+    "conditionB": "Well Loved",
+    "pickupSpot": "Pickup Spot",
+    "btnReserve": "Reserve Item",
+    "btnAlreadyLooped": "Already Looped",
+    "btnOwner": "You're the Sharer!",
+    "btnSignIn": "Sign in to Reserve"
+  },
+  "MyPage": {
+    "tabReceiver": "Items I'll Receive",
+    "tabDonor": "Items I'm Sharing",
+    "btnCancel": "Cancel Reservation",
+    "btnComplete": "Handover Complete 🤝",
+    "btnDropOff": "Dropped off at Storage",
+    "btnPickup": "Picked up",
+    "labelAwaitingPickup": "Awaiting receiver pickup",
+    "labelCreditEarned": "+10 credits earned",
+    "labelAwaitingReservation": "Awaiting reservation",
+    "statusAvailable": "⏳ Awaiting reservation",
+    "statusReserved": "✓ Reserved",
+    "statusStored": "📦 At Storage",
+    "statusCompleted": "🎉 Looped",
+    "msgSuccess": "+10 Credits! Thanks for closing the loop.",
+    "msgDropOffSuccess": "Drop-off complete! +10 credits have been added.",
+    "msgPickupSuccess": "Pickup confirmed — enjoy your new item!",
+    "storageInfoTitle": "Storage Info",
+    "storageInfoLocation": "Location: TBA",
+    "storageInfoHours": "Hours: TBA"
+  }
+}

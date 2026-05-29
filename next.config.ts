@@ -1,5 +1,11 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
+import type { NextConfig } from 'next'
+import createNextIntlPlugin from 'next-intl/plugin'
+
+// next-intl 의 request config 파일 경로를 알려줘서,
+// 서버 컴포넌트가 useTranslations / getTranslations 를 쓸 수 있게 묶어줍니다.
+const withNextIntl = createNextIntlPlugin('./i18n/request.ts')
+
+const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
       {
@@ -10,6 +16,6 @@ const nextConfig = {
       },
     ],
   },
-};
+}
 
-export default nextConfig;
+export default withNextIntl(nextConfig)

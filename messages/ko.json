@@ -1,0 +1,67 @@
+{
+  "Home": {
+    "welcome": "WELCOME TO ONLOOP",
+    "title": "어떤 역할로 참여하시나요?",
+    "subtitle": "Onloop에서 활동할 역할을 선택해주세요. 마이페이지에서 언제든 바꿀 수 있어요.",
+    "roleDonorTitle": "양도자",
+    "roleDonorDesc": "귀국을 앞두고 짐 정리가 필요하신가요? 남은 생활용품을 기증하고 캠퍼스의 폐기물을 줄이는 데 동참하세요.",
+    "roleReceiverTitle": "양수자",
+    "roleReceiverDesc": "한국에 새로 정착하셨나요? 부담스러운 초기 정착 비용을 아끼고, 크레딧으로 필요한 물품을 지원받으세요.",
+    "btnSelect": "선택하기 →",
+    "btnLoading": "이동 중...",
+    "alertNeedLogin": "로그인이 필요한 서비스입니다. 로그인 페이지로 이동합니다.",
+    "alertError": "오류가 발생했습니다: ",
+    "alertWelcomeDonor": "양도자로 환영합니다! 🛫",
+    "alertWelcomeReceiver": "양수자로 환영합니다! 🛬"
+  },
+  "Header": {
+    "explore": "탐색하기",
+    "upload": "나눔하기",
+    "mypage": "마이페이지",
+    "login": "로그인",
+    "logout": "로그아웃"
+  },
+  "Explore": {
+    "title": "새로운 주인을 기다려요",
+    "categoryAll": "전체",
+    "categoryElectronics": "가전",
+    "categoryBooks": "도서",
+    "categoryClothing": "의류",
+    "categoryOthers": "생활/기타",
+    "statusAvailable": "예약 가능",
+    "statusReserved": "예약 중",
+    "statusStored": "보관소 보관 중",
+    "statusCompleted": "거래 완료"
+  },
+  "Detail": {
+    "conditionS": "S급 (새것 같아요)",
+    "conditionA": "A급 (상태가 좋아요)",
+    "conditionB": "B급 (사용감이 있어요)",
+    "pickupSpot": "거래 희망 장소",
+    "btnReserve": "예약하기",
+    "btnAlreadyLooped": "이미 다른 분이 가져갔어요",
+    "btnOwner": "본인 물품은 예약할 수 없어요",
+    "btnSignIn": "예약에는 로그인이 필요해요"
+  },
+  "MyPage": {
+    "tabReceiver": "내가 받을 물품",
+    "tabDonor": "내가 나눌 물품",
+    "btnCancel": "예약 취소",
+    "btnComplete": "거래 완료 🤝",
+    "btnDropOff": "보관소에 맡겼어요",
+    "btnPickup": "수령 완료",
+    "labelAwaitingPickup": "양수자 픽업 대기 중",
+    "labelCreditEarned": "+10 크레딧 적립됨",
+    "labelAwaitingReservation": "예약 대기 중",
+    "statusAvailable": "⏳ 예약 대기 중",
+    "statusReserved": "✓ 예약 완료",
+    "statusStored": "📦 보관소 보관 중",
+    "statusCompleted": "🎉 거래 완료",
+    "msgSuccess": "10 크레딧이 적립되었습니다!",
+    "msgDropOffSuccess": "보관소 입고가 완료됐어요! +10 크레딧이 적립되었습니다.",
+    "msgPickupSuccess": "수령이 완료되었어요! 즐거운 캠퍼스 생활 되세요.",
+    "storageInfoTitle": "보관소 안내",
+    "storageInfoLocation": "보관 장소: 추후 공지",
+    "storageInfoHours": "운영 시간: 추후 공지"
+  }
+}

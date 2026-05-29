@@ -27,23 +27,29 @@ export const dynamic = 'force-dynamic'
 
 // 한 물품 데이터의 모양 (items 테이블의 컬럼들)
 type Item = {
-  id: number | string
-  name: string
+  id: string
+  owner_id: string
+  title: string
+  description?: string | null
   category: string
-  grade: 'S' | 'A' | 'B'
-  image_url?: string | null  // 양도자가 업로드한 사진 (없으면 이모지 폴백)
+  condition: 'S' | 'A' | 'B' | string | null
+  location?: string | null
+  image_urls?: string[] | null   // 양도자가 업로드한 사진 배열 (비어있을 수 있음)
+  // 물품의 순환 상태 — items 테이블 CHECK 제약과 동일한 네 값.
+  //   available → reserved → stored → completed
+  status: 'available' | 'reserved' | 'stored' | 'completed'
   created_at?: string
 }
 
 // 등급 배지 — 탐색 페이지와 동일 매핑(시각 일관성)
-const GRADE_BADGE: Record<Item['grade'], string> = {
+const GRADE_BADGE: Record<string, string> = {
   S: 'bg-mint-tint text-mint-deep',
   A: 'bg-surface   text-steel',
   B: 'bg-[#fdf4e3] text-warn',
 }
 
 // 등급별 한 줄 설명 (배지 옆 보조 문구)
-const GRADE_DESC: Record<Item['grade'], string> = {
+const GRADE_DESC: Record<string, string> = {
   S: '거의 새 것',
   A: '사용감 적음',
   B: '사용감 있음',
@@ -117,8 +123,12 @@ export default async function ItemDetailPage({
   }
 
   const icon       = CATEGORY_ICON[item.category] ?? '📦'
-  const badgeClass = GRADE_BADGE[item.grade] ?? GRADE_BADGE.A
-  const gradeDesc  = GRADE_DESC[item.grade] ?? ''
+  const conditionKey = item.condition ?? 'A'
+  const badgeClass = GRADE_BADGE[conditionKey] ?? GRADE_BADGE.A
+  const gradeDesc  = GRADE_DESC[conditionKey] ?? ''
+  // 히어로 이미지는 사진 배열의 첫 번째 URL을 사용. 나머지는 갤러리로 표시.
+  const heroUrl       = item.image_urls?.[0] ?? null
+  const galleryUrls   = (item.image_urls ?? []).slice(1)
 
   return (
     <main className="max-w-2xl mx-auto px-6 py-12">
@@ -127,10 +137,10 @@ export default async function ItemDetailPage({
 
       {/* ── 히어로 — 사진이 있으면 가득 채워 보여주고, 없으면 큰 이모지로 폴백 ── */}
       <div className="relative aspect-[4/3] bg-surface rounded-xl flex items-center justify-center mt-6 overflow-hidden border border-hairline-soft">
-        {item.image_url ? (
+        {heroUrl ? (
           <Image
-            src={item.image_url}
-            alt={item.name}
+            src={heroUrl}
+            alt={item.title}
             fill
             sizes="(min-width: 768px) 672px, 100vw"
             className="object-cover"
@@ -139,10 +149,29 @@ export default async function ItemDetailPage({
         ) : (
           <span className="text-9xl">{icon}</span>
         )}
-        <span className={`absolute top-4 right-4 px-3 py-1 rounded-full text-[13px] font-semibold ${badgeClass}`}>
-          {item.grade}급 · {gradeDesc}
-        </span>
+        {item.condition && (
+          <span className={`absolute top-4 right-4 px-3 py-1 rounded-full text-[13px] font-semibold ${badgeClass}`}>
+            {item.condition}급{gradeDesc ? ` · ${gradeDesc}` : ''}
+          </span>
+        )}
       </div>
+
+      {/* ── 추가 사진 갤러리 — 2장 이상 올렸을 때만 표시 ───────── */}
+      {galleryUrls.length > 0 && (
+        <div className="mt-4 grid grid-cols-4 gap-2">
+          {galleryUrls.map((url, i) => (
+            <div key={url} className="relative aspect-square rounded-lg overflow-hidden border border-hairline-soft bg-surface-soft">
+              <Image
+                src={url}
+                alt={`${item.title} 추가 사진 ${i + 2}`}
+                fill
+                sizes="(min-width: 768px) 160px, 25vw"
+                className="object-cover"
+              />
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ── 물품 정보 ──────────────────────────────────────── */}
       <div className="mt-8">
@@ -152,8 +181,23 @@ export default async function ItemDetailPage({
         </p>
         {/* 타이틀 — heading-1 토큰 (36px / 600 / 타이트) */}
         <h1 className="text-[36px] font-semibold leading-[1.15] tracking-[-0.5px] text-ink">
-          {item.name}
+          {item.title}
         </h1>
+
+        {/* 양도자가 적어준 설명 — 줄바꿈을 그대로 유지 */}
+        {item.description && (
+          <p className="mt-4 text-[15px] leading-[1.7] text-charcoal whitespace-pre-wrap">
+            {item.description}
+          </p>
+        )}
+
+        {/* 픽업 위치 — 작은 라벨 + 주소 한 줄 */}
+        {item.location && (
+          <div className="mt-5 inline-flex items-center gap-2 px-3 py-2 rounded-full bg-surface text-[13px] text-steel">
+            <span aria-hidden>📍</span>
+            <span>{item.location}</span>
+          </div>
+        )}
       </div>
 
       {/* ── 넛지(Nudge) 메시지 — 옅은 민트 표면(soft mint) ─────
@@ -178,7 +222,7 @@ export default async function ItemDetailPage({
           버튼은 클릭 이벤트가 필요해 별도 클라이언트 컴포넌트로 분리. */}
       <ReserveButton
         itemId={String(item.id)}
-        itemName={item.name}
+        itemName={item.title}
         initialReserved={isReserved}
       />
     </main>

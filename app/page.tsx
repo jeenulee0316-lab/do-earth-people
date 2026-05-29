@@ -2,17 +2,22 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation' // 페이지 이동을 위한 Next.js 라우터
+import { useTranslations } from 'next-intl'
 import { supabase } from '@/lib/supabase'
 
 // ──────────────────────────────────────────────────────────────────
 // 홈(온보딩) 페이지 — Mintlify 디자인 시스템 적용
 //   상단: micro-uppercase 라벨 + 큰 헤드라인 + 부제 (히어로 리듬)
 //   하단: 역할 카드 2장 — card-base + 민트 액센트
+//   ※ 모든 노출 텍스트는 messages/{locale}.json 의 "Home" 네임스페이스에서 읽어옵니다.
 // ──────────────────────────────────────────────────────────────────
 export default function Onboarding() {
   const [loading, setLoading] = useState(false)
   const [pending, setPending] = useState<'donor' | 'recipient' | null>(null)
   const router = useRouter() // 역할 선택 후 다른 페이지로 보낼 때 사용
+
+  // Home 네임스페이스 번역 — messages/{locale}.json 의 "Home" 키 아래를 읽어옵니다.
+  const t = useTranslations('Home')
 
   const selectRole = async (role: 'donor' | 'recipient') => {
     setLoading(true)
@@ -22,7 +27,7 @@ export default function Onboarding() {
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
-      alert('로그인이 필요한 서비스입니다. 로그인 페이지로 이동합니다.')
+      alert(t('alertNeedLogin'))
       window.location.href = '/login'
       return
     }
@@ -34,7 +39,7 @@ export default function Onboarding() {
       .eq('id', user.id)
 
     if (error) {
-      alert('오류가 발생했습니다: ' + error.message)
+      alert(t('alertError') + error.message)
       setLoading(false)
       setPending(null)
       return
@@ -45,7 +50,7 @@ export default function Onboarding() {
     localStorage.setItem('onloop_role', role)
 
     // 4. 환영 알림창 표시 (alert는 사용자가 확인을 누를 때까지 다음 줄을 막음)
-    alert(role === 'donor' ? '양도자로 환영합니다! 🛫' : '양수자로 환영합니다! 🛬')
+    alert(role === 'donor' ? t('alertWelcomeDonor') : t('alertWelcomeReceiver'))
 
     // 5. 역할별로 다음 화면으로 자동 이동
     if (role === 'donor') {
@@ -57,6 +62,10 @@ export default function Onboarding() {
     setLoading(false)
   }
 
+  // 카드 CTA 라벨 — 로딩 중에는 "이동 중..." / 기본은 "선택하기 →"
+  const ctaIdle = t('btnSelect')
+  const ctaLoading = t('btnLoading')
+
   return (
     <main className="bg-canvas">
       {/* ── 히어로 ─────────────────────────────────────────────
@@ -64,19 +73,17 @@ export default function Onboarding() {
       <section className="max-w-3xl mx-auto px-6 pt-24 pb-12 text-center">
         {/* 마이크로 라벨 — 브랜드 그린 액센트 (Mintlify의 대문자 라벨 패턴) */}
         <p className="text-[11px] font-semibold tracking-[0.5px] uppercase text-mint-deep mb-4">
-          Welcome to Onloop
+          {t('welcome')}
         </p>
 
         {/* 헤드라인 — heading-2 토큰(36px / 600 / 타이트한 line-height) */}
         <h1 className="text-[36px] sm:text-[44px] font-semibold leading-[1.1] tracking-[-0.5px] text-ink mb-4">
-          어떤 역할로 참여하시나요?
+          {t('title')}
         </h1>
 
         {/* 서브타이틀 — 18px subtitle 톤 */}
         <p className="text-[18px] leading-[1.5] text-steel">
-          Onloop에서 활동할 역할을 선택해주세요.
-          <br className="hidden sm:block" />
-          마이페이지에서 언제든 바꿀 수 있어요.
+          {t('subtitle')}
         </p>
       </section>
 
@@ -85,18 +92,22 @@ export default function Onboarding() {
         <div className="grid sm:grid-cols-2 gap-4">
           <RoleCard
             label="The Departing"
-            title="양도자"
-            description="귀국을 앞두고 짐 정리가 필요하신가요? 남은 생활용품을 기증하고 캠퍼스의 폐기물을 줄이는 데 동참하세요."
+            title={t('roleDonorTitle')}
+            description={t('roleDonorDesc')}
             emoji="🛫"
+            ctaIdle={ctaIdle}
+            ctaLoading={ctaLoading}
             onClick={() => selectRole('donor')}
             loading={loading && pending === 'donor'}
             disabled={loading}
           />
           <RoleCard
             label="The Arriving"
-            title="양수자"
-            description="한국에 새로 정착하셨나요? 부담스러운 초기 정착 비용을 아끼고, 크레딧으로 필요한 물품을 지원받으세요."
+            title={t('roleReceiverTitle')}
+            description={t('roleReceiverDesc')}
             emoji="🛬"
+            ctaIdle={ctaIdle}
+            ctaLoading={ctaLoading}
             onClick={() => selectRole('recipient')}
             loading={loading && pending === 'recipient'}
             disabled={loading}
@@ -114,12 +125,15 @@ export default function Onboarding() {
 // ──────────────────────────────────────────────────────────────────
 function RoleCard({
   label, title, description, emoji,
+  ctaIdle, ctaLoading,
   onClick, loading, disabled,
 }: {
   label: string
   title: string
   description: string
   emoji: string
+  ctaIdle: string
+  ctaLoading: string
   onClick: () => void
   loading: boolean
   disabled: boolean
@@ -140,7 +154,7 @@ function RoleCard({
         {label}
       </p>
 
-      {/* 한글 타이틀 (heading-4: 22px / 600) */}
+      {/* 타이틀 (heading-4: 22px / 600) */}
       <h2 className="text-[22px] font-semibold text-ink leading-[1.3] mb-2">
         {title}
       </h2>
@@ -152,8 +166,7 @@ function RoleCard({
 
       {/* CTA 인디케이터 — 우하단 화살표 알약 */}
       <span className="mt-6 inline-flex items-center gap-1 text-[14px] font-medium text-ink">
-        {loading ? '이동 중...' : '선택하기'}
-        <span className="transition-transform group-hover:translate-x-0.5" aria-hidden>→</span>
+        {loading ? ctaLoading : ctaIdle}
       </span>
     </button>
   )

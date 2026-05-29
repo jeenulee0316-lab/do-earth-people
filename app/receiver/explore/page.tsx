@@ -1,6 +1,6 @@
-import Link from 'next/link'
-import Image from 'next/image'
+import { getTranslations } from 'next-intl/server'
 import { supabase } from '@/lib/supabase'
+import ExploreGrid, { type ExploreItem } from './ExploreGrid'
 
 // ─────────────────────────────────────────────────────────────────
 // 이 페이지는 "서버 컴포넌트"입니다.
@@ -8,48 +8,22 @@ import { supabase } from '@/lib/supabase'
 //   - 서버 컴포넌트는 페이지가 사용자 브라우저로 보내지기 *전에* 서버에서 실행됨.
 //   - 따라서 DB(Supabase) 호출을 컴포넌트 함수 안에서 바로 await로 부를 수 있고,
 //     그 결과를 이미 채워서 HTML을 내려줄 수 있어요. (= 화면이 깜빡이지 않음)
+//
+// 필터 칩 같은 "사용자가 누르면 즉시 바뀌는" 인터랙션은 별도 클라이언트 컴포넌트
+// (./ExploreGrid.tsx) 에서 처리합니다.
 // ─────────────────────────────────────────────────────────────────
 
 // 화면이 항상 최신 데이터를 보여주도록, 페이지 캐시를 끄고 매 요청마다 새로 불러옴.
 // (다른 양도자가 막 등록한 물품도 바로 보여야 하니까)
 export const dynamic = 'force-dynamic'
 
-// DB에서 받아올 한 행(row)의 모양 — 양도자 페이지에서 INSERT한 컬럼들과 동일.
-type Item = {
-  id: number | string
-  name: string
-  category: string
-  grade: 'S' | 'A' | 'B'
-  image_url?: string | null  // Supabase Storage 공개 URL (없으면 이모지 폴백)
-  created_at?: string
-}
-
-// ── 등급별 배지 스타일 ─────────────────────────────────────────
-// Mintlify 원칙(액센트 색은 절제) 적용:
-//   S(가장 좋음) → 민트 틴트 (브랜드 강조)
-//   A(보통)     → 회색 surface (차분)
-//   B(사용감)   → 옅은 호박색 (warn 톤의 가벼운 버전)
-const GRADE_BADGE: Record<Item['grade'], string> = {
-  S: 'bg-mint-tint text-mint-deep',
-  A: 'bg-surface   text-steel',
-  B: 'bg-[#fdf4e3] text-warn',
-}
-
-// ── 카테고리 → 이모지 아이콘 매핑 (이미지가 없으니 시각적 단서를 추가) ──
-const CATEGORY_ICON: Record<string, string> = {
-  Kitchen:     '🍳',
-  Furniture:   '🪑',
-  Electronics: '🔌',
-  Accessories: '🧢',
-  Study:       '📚',
-  Clothing:    '👕',
-  Books:       '📖',
-}
-
 export default async function ExplorePage() {
+  // 서버 컴포넌트용 번역 헬퍼 — 페이지 헤더/에러 메시지의 현지화
+  const t = await getTranslations('Explore')
+
   // ─────────────────────────────────────────────────────────────
   // 두 테이블을 한 번에(병렬로) 조회합니다.
-  //   (A) items         → "어떤 물품들이 등록돼 있는가"
+  //   (A) items         → "어떤 물품들이 등록돼 있는가" (status='available'만)
   //   (B) reservations  → "그 중 어떤 물품이 이미 예약됐는가"
   //
   // 두 테이블은 다음 다리(Bridge)로 연결돼 있어요:
@@ -62,18 +36,22 @@ export default async function ExplorePage() {
     { data, error, count },               // (A) items 결과
     { data: reservations, error: rError }, // (B) reservations 결과
   ] = await Promise.all([
+    // 탐색 페이지에는 "아직 양수 가능한" 물품만 노출합니다.
+    //   items.status = 'available' 인 행만 가져와서, 최신 등록 순으로 정렬.
+    //   reserved / completed 상태의 물품은 DB 단계에서 제외돼 카드 자체가 안 그려져요.
     supabase
       .from('items')
       .select('*', { count: 'exact' })
+      .eq('status', 'available')
       .order('created_at', { ascending: false }),
 
     supabase.from('reservations').select('item_id'),
   ])
 
-  // ── 예약 여부 빠른 조회용 Set 만들기 ──────────────────────────
-  // Set의 .has()는 평균 O(1)이라 카드가 많아져도 빠릅니다.
-  const reservedSet = new Set<string>(
-    (reservations ?? []).map(r => String((r as { item_id: string | number }).item_id))
+  // ── 예약된 item_id 목록 만들기 ──────────────────────────────
+  // 클라이언트 컴포넌트로 넘기기 위해 배열로 변환 (Set은 직렬화가 안 됨).
+  const reservedItemIds: string[] = (reservations ?? []).map(r =>
+    String((r as { item_id: string | number }).item_id)
   )
 
   // ── 진단 로그 (서버 터미널 = `npm run dev` 창에 출력) ─────────
@@ -86,22 +64,20 @@ export default async function ExplorePage() {
     console.log('[explore] first row       =', data[0])
   }
 
-  const items: Item[] = (data as Item[] | null) ?? []
+  const items: ExploreItem[] = (data as ExploreItem[] | null) ?? []
 
   return (
     <main className="max-w-6xl mx-auto px-6 py-16">
       {/* ── 페이지 헤더 ────────────────────────────────────────
-          micro-uppercase 라벨 + 큰 헤드라인 + subtitle 본문의 3단 리듬. */}
+          큰 헤드라인만 번역키를 받아 현지화합니다.
+          (마이크로 라벨 'Browse' 는 양 언어에 두루 통용되는 표현이라 하드코딩) */}
       <header className="mb-10">
         <p className="text-[11px] font-semibold tracking-[0.5px] uppercase text-mint-deep mb-3">
           Browse
         </p>
         <h1 className="text-[40px] sm:text-[44px] font-semibold leading-[1.1] tracking-[-1px] text-ink mb-3">
-          What&apos;s on the loop today?
+          {t('title')}
         </h1>
-        <p className="text-[18px] leading-[1.5] text-steel max-w-2xl">
-          캠퍼스 친구들이 떠나며 남긴 물품들이에요. 마음에 드는 걸 골라보세요.
-        </p>
       </header>
 
       {/* ── 에러 상태 ─────────────────────────────────────────
@@ -113,7 +89,7 @@ export default async function ExplorePage() {
         </div>
       )}
 
-      {/* ── 비어있는 상태 ─────────────────────────────────────
+      {/* ── 전체가 비어있는 상태 ──────────────────────────────
           에러는 아니지만 받은 행이 0개일 때.
           DB에는 물품이 있는데 여기 들어왔다면 99% RLS 정책 문제입니다. */}
       {!error && items.length === 0 && (
@@ -155,74 +131,11 @@ export default async function ExplorePage() {
         </div>
       )}
 
-      {/* ── 카드 그리드 ───────────────────────────────────────
-          모바일 1열 → 태블릿 2열 → 데스크톱 3~4열로 자동 확장. */}
+      {/* ── 필터칩 + 카드 그리드 ───────────────────────────────
+          상호작용이 필요한 부분만 클라이언트 컴포넌트로 분리해 위임합니다.
+          서버에서 받아온 items를 그대로 props로 넘기면, 필터링은 브라우저에서 즉시 처리돼요. */}
       {!error && items.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
-          {items.map(item => {
-            const icon = CATEGORY_ICON[item.category] ?? '📦'
-            const badgeClass = GRADE_BADGE[item.grade] ?? GRADE_BADGE.A
-            // 위에서 만든 Set으로 "이 카드의 물품이 예약됐는지" 확인.
-            const isReserved = reservedSet.has(String(item.id))
-
-            return (
-              // 카드 전체를 <Link>로 감싸서, 어디를 눌러도 상세 페이지로 이동.
-              // 예약된 카드는 흐리게 처리해 "끝난 물건" 느낌을 줍니다.
-              <Link
-                key={item.id}
-                href={`/receiver/explore/${item.id}`}
-                className={`group block bg-canvas border rounded-xl overflow-hidden transition-all ${
-                  isReserved
-                    ? 'border-hairline opacity-70 hover:opacity-100'
-                    : 'border-hairline hover:border-mint hover:shadow-[0_8px_24px_rgba(0,212,164,0.08)]'
-                }`}
-              >
-                {/* 카드 상단 — 사진이 있으면 next/image로 cover 표시,
-                    없으면 카테고리 이모지로 폴백 (시각적 단서 유지) */}
-                <div className="relative aspect-square bg-surface-soft flex items-center justify-center overflow-hidden">
-                  {item.image_url ? (
-                    <Image
-                      src={item.image_url}
-                      alt={item.name}
-                      fill
-                      sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
-                      className={`object-cover transition-transform ${
-                        isReserved ? 'opacity-50 grayscale' : 'group-hover:scale-105'
-                      }`}
-                    />
-                  ) : (
-                    <span
-                      className={`text-6xl transition-transform ${
-                        isReserved ? 'opacity-50 grayscale' : 'group-hover:scale-105'
-                      }`}
-                    >
-                      {icon}
-                    </span>
-                  )}
-
-                  {/* 우측 상단 배지: 예약 완료(검은 알약) / 등급(틴트 알약) */}
-                  {isReserved ? (
-                    <span className="absolute top-3 right-3 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[12px] font-semibold bg-canvas-dark text-canvas">
-                      ✓ 예약 완료
-                    </span>
-                  ) : (
-                    <span className={`absolute top-3 right-3 px-2 py-0.5 rounded-full text-[12px] font-semibold ${badgeClass}`}>
-                      {item.grade}급
-                    </span>
-                  )}
-                </div>
-
-                {/* 카드 하단 — 텍스트 정보 영역 */}
-                <div className={`px-4 py-4 ${isReserved ? 'opacity-60' : ''}`}>
-                  <h2 className="font-semibold text-ink text-[15px] leading-tight truncate">
-                    {item.name}
-                  </h2>
-                  <p className="text-[13px] text-steel mt-1">{item.category}</p>
-                </div>
-              </Link>
-            )
-          })}
-        </div>
+        <ExploreGrid items={items} reservedItemIds={reservedItemIds} />
       )}
     </main>
   )

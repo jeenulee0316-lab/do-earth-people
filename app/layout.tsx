@@ -1,5 +1,7 @@
 import './globals.css'
 import { Inter } from 'next/font/google'
+import { NextIntlClientProvider } from 'next-intl'
+import { getLocale, getMessages } from 'next-intl/server'
 import Header from '@/components/Header'
 
 // ──────────────────────────────────────────────────────────────────
@@ -14,12 +16,20 @@ const inter = Inter({
   display: 'swap',
 })
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // 현재 사용자의 언어(쿠키 기반) + 그에 맞는 번역 사전을 next-intl 헬퍼로 받아옴.
+  // 이 두 값을 NextIntlClientProvider 에 흘려 보내면, 안쪽의 모든 클라이언트
+  // 컴포넌트에서 useTranslations() / useLocale() 훅이 동작합니다.
+  const locale   = await getLocale()
+  const messages = await getMessages()
+
   return (
-    <html lang="ko" className={inter.variable}>
+    <html lang={locale} className={inter.variable}>
       <body className="bg-canvas text-ink font-sans antialiased">
-        <Header />
-        {children}
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          <Header />
+          {children}
+        </NextIntlClientProvider>
       </body>
     </html>
   )
