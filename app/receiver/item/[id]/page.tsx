@@ -34,6 +34,8 @@ type Item = {
   category: string
   condition: 'S' | 'A' | 'B' | string | null
   location?: string | null
+  // 💰 이 물품을 예약할 때 차감되는 크레딧 가격. 운영팀이 입고 시 설정(기본 10).
+  price?: number | null
   image_urls?: string[] | null
   // 물품의 순환 상태 — items 테이블 CHECK 제약과 동일한 세 값.
   //   available → 양수 가능 (예약 버튼 활성)
@@ -296,6 +298,9 @@ export default async function ItemDetailPage({
         itemTitle={item.title}
         ownerId={item.owner_id}
         status={item.status}
+        // 💰 이 물품의 실제 가격을 그대로 넘김 — 예약 바/모달이 고정 10이 아니라
+        //    이 값을 표시·차감 안내에 사용. price 가 비어있는 옛 데이터는 10으로 폴백.
+        price={typeof item.price === 'number' ? item.price : 10}
       />
     </main>
   )

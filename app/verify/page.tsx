@@ -19,8 +19,8 @@ import { supabase } from '@/lib/supabase'
 //   B. 수동 서류 제출 (느린 경로, 교환학생/늦은 메일 발급용)
 //      └ 입학 허가서/재학증명서 파일 + 학번을 제출 → 운영팀 검토 후 승인.
 //
-// 인증 결과는 profiles.is_verified (boolean) 에 반영되고,
-// 물품 등록(/donor/new) 페이지에서 이 값을 보고 진입을 허용합니다.
+// 인증 결과는 profiles.is_verified (boolean) 에 반영됩니다.
+// (캠퍼스 구성원임을 확인하는 신뢰 장치 — 인증을 마치면 물품을 둘러보고 예약할 수 있어요.)
 // ═════════════════════════════════════════════════════════════════
 
 const VERIFICATION_BUCKET = 'verification-docs'
@@ -91,8 +91,8 @@ export default function VerifyPage() {
         {alreadyVerified && (
           <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-mint-tint text-mint-deep text-[13px] font-semibold">
             <span aria-hidden>✓</span> 이미 인증이 완료된 계정이에요
-            <Link href="/donor/new" className="ml-2 underline underline-offset-2">
-              물품 등록하러 가기 →
+            <Link href="/receiver/explore" className="ml-2 underline underline-offset-2">
+              물품 둘러보기 →
             </Link>
           </div>
         )}
@@ -239,7 +239,7 @@ function EmailOtpCard({ alreadyVerified }: { alreadyVerified: boolean }) {
       {step === 'verified' ? (
         <VerifiedBlock
           headline="이메일 인증이 완료됐어요"
-          description="이제 물품을 자유롭게 등록하실 수 있어요."
+          description="이제 필요한 물품을 둘러보고 예약할 수 있어요."
         />
       ) : step === 'enter-otp' ? (
         // ── 2단계: 6자리 코드 입력 ──────────────────────────
@@ -593,10 +593,10 @@ function VerifiedBlock({ headline, description }: { headline: string; descriptio
         {description}
       </p>
       <Link
-        href="/donor/new"
+        href="/receiver/explore"
         className="inline-flex items-center justify-center mt-4 h-10 px-5 rounded-full bg-ink text-canvas text-[13px] font-medium hover:bg-charcoal transition-colors"
       >
-        물품 등록하러 가기 →
+        물품 둘러보기 →
       </Link>
     </div>
   )

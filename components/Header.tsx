@@ -100,12 +100,16 @@ export default function Header() {
             >
               {t('explore')}
             </Link>
-            <Link
-              href="/donor/new"
-              className="text-[14px] font-medium text-steel hover:text-ink transition-colors"
-            >
-              {t('upload')}
-            </Link>
+            {/* 재고 관리 — 운영팀(admin) 전용 진입점. B2C 중앙집중 모델에서
+                일반 사용자에게는 어떤 등록/재고 링크도 보이지 않습니다. */}
+            {isAdmin && (
+              <Link
+                href="/admin"
+                className="text-[14px] font-medium text-steel hover:text-ink transition-colors"
+              >
+                {t('inventory')}
+              </Link>
+            )}
           </nav>
         </div>
 
@@ -115,8 +119,9 @@ export default function Header() {
           {/* 로그인된 경우: 크레딧 뱃지 + 마이페이지 + 로그아웃 */}
           {isLoggedIn === true && (
             <>
-              {/* 크레딧 뱃지 — 민트 틴트 배경의 작은 알약 (브랜드 액센트 자리) */}
-              {credits !== null && (
+              {/* 크레딧 뱃지 — 민트 틴트 배경의 작은 알약 (브랜드 액센트 자리).
+                  운영팀(admin)은 크레딧을 쓰지 않으므로 일반 사용자에게만 노출합니다. */}
+              {credits !== null && !isAdmin && (
                 <div className="hidden sm:inline-flex items-center gap-1.5 bg-mint-tint text-mint-deep h-8 px-3 rounded-full text-[13px] font-semibold">
                   <span aria-hidden>◆</span>
                   <span>{credits}</span>

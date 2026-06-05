@@ -27,15 +27,14 @@ import { supabase } from '@/lib/supabase'
 //   · 비로그인이면 "로그인하고 예약하기" → /login 으로 보냄
 // ═════════════════════════════════════════════════════════════════
 
-// 한 건 예약에 차감되는 크레딧 — DB의 reserve_item 함수와 동일하게 10으로 고정.
-// (양쪽이 어긋나면 사용자에게 보여주는 안내와 실제 차감액이 달라지므로 주의)
-const RESERVATION_COST = 10
-
 type Props = {
   itemId:    string                                  // reservations.item_id / items.id
   itemTitle: string                                  // 사람 친화 이름 (모달/토스트 메시지)
   ownerId:   string                                  // 양도자 user_id ("내 물품" 비교용)
   status:    'available' | 'reserved' | 'stored' | 'completed'  // 예약 가능 여부의 1차 게이트 (available 외에는 모두 잠금)
+  // 💰 이 물품의 크레딧 가격 — 더 이상 10 고정이 아니라 items.price 값을 그대로 받습니다.
+  //    DB의 reserve_item 함수가 차감하는 금액과 반드시 같아야 해요(안내와 실제가 어긋나면 안 됨).
+  price:     number
 }
 
 // reserve_item RPC가 돌려주는 응답 형태
@@ -54,7 +53,7 @@ type ReserveResult = {
   current_credits?: number
 }
 
-export default function ReserveBar({ itemId, itemTitle, ownerId, status }: Props) {
+export default function ReserveBar({ itemId, itemTitle, ownerId, status, price }: Props) {
   const router = useRouter()
   // Detail 네임스페이스 번역 — 버튼 라벨/안내 문구
   const t = useTranslations('Detail')
@@ -161,7 +160,7 @@ export default function ReserveBar({ itemId, itemTitle, ownerId, status }: Props
         result.error_code === 'own_item'          ? '본인이 올린 물품은 예약할 수 없어요.' :
         result.error_code === 'profile_not_found' ? '프로필 정보를 찾을 수 없어요. 운영팀에 문의해 주세요.' :
         result.error_code === 'insufficient_credits'
-          ? `크레딧이 부족해요 (현재 ${result.current_credits ?? 0} 크레딧, 필요: ${RESERVATION_COST})`
+          ? t('insufficientCredits', { current: result.current_credits ?? 0, price })
           : '예약 처리 중 알 수 없는 오류가 발생했어요.'
       setModalError(friendly)
       // 로그인 만료는 사용자가 직접 다시 시도하기 어려우니 짧은 지연 후 /login 으로 보냄
@@ -224,8 +223,8 @@ export default function ReserveBar({ itemId, itemTitle, ownerId, status }: Props
     helper = t('btnSignIn')
   } else {
     label = t('btnReserve')
-    // 사용자에게 비용을 미리 알려서 모달이 깜짝 등장하지 않도록
-    helper = `${RESERVATION_COST} credits`
+    // 사용자에게 비용을 미리 알려서 모달이 깜짝 등장하지 않도록 (물품별 실제 가격)
+    helper = t('reserveCost', { price })
   }
 
   const variantClass =
@@ -237,7 +236,7 @@ export default function ReserveBar({ itemId, itemTitle, ownerId, status }: Props
 
   // 모달 내부의 사전 잔액 부족 안내 — RPC 응답 전에 미리 차단
   const hasInsufficientUpFront =
-    typeof userCredits === 'number' && userCredits < RESERVATION_COST
+    typeof userCredits === 'number' && userCredits < price
 
   return (
     <>
@@ -264,7 +263,7 @@ export default function ReserveBar({ itemId, itemTitle, ownerId, status }: Props
       )}
 
       {/* ══════════════════════════════════════════════════════════
-          🪟 확인 모달 — "10 크레딧이 차감됩니다. 예약을 진행할까요?"
+          🪟 확인 모달 — "N 크레딧이 차감됩니다. 예약을 진행할까요?" (N = 물품별 price)
           ────────────────────────────────────────────────────────
           - 백드롭 클릭 / ESC 키 / "취소" 버튼 어느 쪽으로도 닫을 수 있음
           - 잔액이 모자라면 "예약하기" 버튼이 비활성 + 친절한 안내
@@ -294,7 +293,7 @@ export default function ReserveBar({ itemId, itemTitle, ownerId, status }: Props
               id="reserve-confirm-title"
               className="text-[22px] font-semibold text-ink leading-[1.3] tracking-[-0.2px] mb-3"
             >
-              {RESERVATION_COST} 크레딧이 차감됩니다. 예약을 진행할까요?
+              {t('confirmTitle', { price })}
             </h2>
 
             {/* 본문 — 어떤 물품을 예약하는지 + 현재 잔액 */}
@@ -319,7 +318,7 @@ export default function ReserveBar({ itemId, itemTitle, ownerId, status }: Props
                   }`}
                 >
                   {typeof userCredits === 'number'
-                    ? `${userCredits - RESERVATION_COST} 크레딧`
+                    ? `${userCredits - price} 크레딧`
                     : '—'}
                 </span>
               </div>
@@ -353,7 +352,7 @@ export default function ReserveBar({ itemId, itemTitle, ownerId, status }: Props
                 disabled={isSaving || hasInsufficientUpFront}
                 className="inline-flex items-center justify-center h-11 px-5 rounded-full bg-ink text-canvas text-[14px] font-medium hover:bg-charcoal disabled:bg-hairline disabled:text-muted disabled:cursor-not-allowed transition-colors"
               >
-                {isSaving ? '예약 처리 중...' : `예약하기 (-${RESERVATION_COST})`}
+                {isSaving ? '예약 처리 중...' : t('confirmCta', { price })}
               </button>
             </div>
           </div>

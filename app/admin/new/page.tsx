@@ -4,22 +4,25 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
+import { useTranslations } from 'next-intl'
 import { supabase } from '@/lib/supabase'
 
 // ═════════════════════════════════════════════════════════════════
 // 📚 비전공자 팀원을 위한 1분 설명: 이 페이지가 하는 일
 // ─────────────────────────────────────────────────────────────────
-// "양도자(Donor) 물품 등록" 페이지예요. 한 번에 한 개의 물품을
-// 사진/제목/설명/카테고리/상태/위치 정보와 함께 자세히 올리는 폼이에요.
+// "신규 재고 등록(Inventory Intake)" 페이지예요. B2C 중앙집중 모델에서
+// 운영팀(admin)이 입고된 물품 한 개를 사진/제목/카테고리/상태/설명과 함께
+// 보관소 재고로 빠르게 등록하는 폼입니다.
 //
-//   1) 학생 인증(is_verified = true)을 통과한 사용자만 등록 가능
+//   1) role = 'admin' 인 운영팀만 접근 가능
 //   2) 사진 최대 5장까지 Supabase Storage('item-images' 버킷)에 업로드
 //   3) 업로드된 사진의 공개 URL들을 items.image_urls(text[])에 저장
-//   4) 저장 성공하면 마이페이지로 이동해서 등록 결과 확인
+//   4) status='available' 로 저장 → 곧바로 [재고] 탭에 노출, 예약 가능
+//   5) 저장 성공하면 /admin 대시보드로 즉시 이동해 결과 확인
 // ═════════════════════════════════════════════════════════════════
 
 // ─────────────────────────────────────────────────────────────────
-// 📸 이미지 업로드 정책 (donor 페이지 공통)
+// 📸 이미지 업로드 정책
 // ─────────────────────────────────────────────────────────────────
 const STORAGE_BUCKET = 'item-images'
 const MAX_FILE_BYTES = 5 * 1024 * 1024            // 사진 한 장 최대 5MB
@@ -27,27 +30,28 @@ const MAX_FILES      = 5                          // 한 물품당 최대 5장
 const ALLOWED_MIME   = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 
 // ─────────────────────────────────────────────────────────────────
-// 카테고리 옵션 — 탐색 페이지의 CATEGORY_ICON 매핑과 키를 맞춰주세요.
-// (영문 키 그대로 저장 → 탐색 페이지에서 이모지 폴백이 자연스럽게 동작)
+// 카테고리 옵션 — value(영문 키)는 DB에 그대로 저장되고, 표시 라벨은
+// i18n(AdminNew.cat*) 에서 가져옵니다. 탐색 페이지의 CATEGORY_ICON 키와 일치.
 // ─────────────────────────────────────────────────────────────────
 const CATEGORY_OPTIONS = [
-  { value: 'Kitchen',     label: '주방',     icon: '🍳' },
-  { value: 'Furniture',   label: '가구',     icon: '🪑' },
-  { value: 'Electronics', label: '전자기기', icon: '🔌' },
-  { value: 'Accessories', label: '잡화',     icon: '🧢' },
-  { value: 'Study',       label: '학습용품', icon: '📚' },
-  { value: 'Clothing',    label: '의류',     icon: '👕' },
-  { value: 'Books',       label: '도서',     icon: '📖' },
-  { value: 'Other',       label: '기타',     icon: '📦' },
+  { value: 'Kitchen',     icon: '🍳' },
+  { value: 'Furniture',   icon: '🪑' },
+  { value: 'Electronics', icon: '🔌' },
+  { value: 'Accessories', icon: '🧢' },
+  { value: 'Study',       icon: '📚' },
+  { value: 'Clothing',    icon: '👕' },
+  { value: 'Books',       icon: '📖' },
+  { value: 'Other',       icon: '📦' },
 ] as const
 
 // ─────────────────────────────────────────────────────────────────
-// 상태 등급 — 탐색 페이지의 GRADE_BADGE와 값(S/A/B)을 맞춰주세요.
+// 상태 등급 — value(S/A/B)는 DB 저장값, 라벨/설명은 i18n(AdminNew.cond*).
+// 탐색 페이지의 GRADE_BADGE 값과 맞춰주세요.
 // ─────────────────────────────────────────────────────────────────
 const CONDITION_OPTIONS = [
-  { value: 'S', label: 'S급', description: '거의 새 것',  dotColor: 'bg-emerald-500' },
-  { value: 'A', label: 'A급', description: '사용감 적음', dotColor: 'bg-sky-500' },
-  { value: 'B', label: 'B급', description: '사용감 있음', dotColor: 'bg-amber-500' },
+  { value: 'S', dotColor: 'bg-emerald-500' },
+  { value: 'A', dotColor: 'bg-sky-500' },
+  { value: 'B', dotColor: 'bg-amber-500' },
 ] as const
 
 // 업로드 진행 중인 사진 한 장의 상태 모양
@@ -62,20 +66,21 @@ type UploadSlot = {
   isUploading: boolean
 }
 
-export default function DonorNewPage() {
+export default function AdminNewItemPage() {
   const router = useRouter()
+  const t = useTranslations('AdminNew')
 
   // ─────────────────────────────────────────────────────────────
-  // 🔐 학생 인증 게이팅 — is_verified = true 인 사용자만 접근 허용.
-  //    (기존 페이지와 동일한 패턴 유지)
+  // 🔐 운영팀 전용 게이팅 — role = 'admin' 인 사용자만 접근 허용.
+  //    B2C 중앙집중 모델에서 재고 등록은 운영팀만 할 수 있어요.
   // ─────────────────────────────────────────────────────────────
-  const [verifyState, setVerifyState] =
-    useState<'loading' | 'verified' | 'unverified'>('loading')
+  const [accessState, setAccessState] =
+    useState<'loading' | 'admin' | 'denied'>('loading')
   // 로그인 자체가 안 된 경우엔 /login으로 보내기 위한 별도 플래그
   const [redirectingToLogin, setRedirectingToLogin] = useState(false)
 
   useEffect(() => {
-    const checkVerification = async () => {
+    const checkAccess = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
         setRedirectingToLogin(true)
@@ -84,19 +89,19 @@ export default function DonorNewPage() {
       }
       const { data, error } = await supabase
         .from('profiles')
-        .select('is_verified')
+        .select('role')
         .eq('id', user.id)
         .single()
 
       if (error) {
-        // 프로필 조회 실패는 보수적으로 미인증 처리 (강제 우회 방지)
-        console.error('[donor/new] profile fetch error', error)
-        setVerifyState('unverified')
+        // 프로필 조회 실패는 보수적으로 접근 거부 처리 (강제 우회 방지)
+        console.error('[admin/new] profile fetch error', error)
+        setAccessState('denied')
         return
       }
-      setVerifyState(data?.is_verified ? 'verified' : 'unverified')
+      setAccessState(data?.role === 'admin' ? 'admin' : 'denied')
     }
-    checkVerification()
+    checkAccess()
   }, [router])
 
   // ── 폼 입력 상태 ─────────────────────────────────────────────
@@ -104,7 +109,9 @@ export default function DonorNewPage() {
   const [description, setDescription] = useState('')
   const [category,    setCategory]    = useState<typeof CATEGORY_OPTIONS[number]['value']>('Kitchen')
   const [condition,   setCondition]   = useState<typeof CONDITION_OPTIONS[number]['value']>('A')
-  const [location,    setLocation]    = useState('')
+  // 💰 크레딧 가격 — 운영팀이 입고 시 직접 설정. 문자열로 들고 있다가 제출 시 숫자로 변환
+  //   (입력칸을 잠시 비울 수 있게 string 상태로 둡니다. 기본값 '10')
+  const [price,       setPrice]       = useState('10')
 
   // ── 이미지 슬롯 ─────────────────────────────────────────────
   const [slots,    setSlots]    = useState<UploadSlot[]>([])
@@ -120,15 +127,20 @@ export default function DonorNewPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // 폼 제출 가능 여부 — 제목 필수 + 모든 사진 업로드 완료 + 저장 진행 중 아님
+  // 가격 입력이 올바른지 — 비어있지 않고, 0 이상의 정수여야 함
+  const priceNum = Number(price.trim())
+  const isPriceValid = price.trim() !== '' && Number.isInteger(priceNum) && priceNum >= 0
+
+  // 폼 제출 가능 여부 — 제목·가격 필수 + 모든 사진 업로드 완료 + 저장 진행 중 아님
   const canSubmit = useMemo(() => {
-    if (verifyState !== 'verified') return false
+    if (accessState !== 'admin') return false
     if (isSaving) return false
     if (title.trim().length === 0) return false
+    if (!isPriceValid) return false
     // 업로드 중인 사진이 하나라도 있으면 막아준다 (미완성 URL이 저장될 수 있음)
     if (slots.some(s => s.isUploading)) return false
     return true
-  }, [verifyState, isSaving, title, slots])
+  }, [accessState, isSaving, title, isPriceValid, slots])
 
   // ─────────────────────────────────────────────────────────────
   // 🖼️ 사진 파일 선택 → 업로드 핸들러
@@ -142,7 +154,7 @@ export default function DonorNewPage() {
     // 현재 남은 슬롯 수만큼만 받기
     const remaining = MAX_FILES - slots.length
     if (remaining <= 0) {
-      alert(`사진은 최대 ${MAX_FILES}장까지 올릴 수 있어요.`)
+      alert(t('errMaxFiles', { max: MAX_FILES }))
       return
     }
 
@@ -152,11 +164,11 @@ export default function DonorNewPage() {
     const newSlots: UploadSlot[] = []
     for (const file of incoming) {
       if (!ALLOWED_MIME.includes(file.type)) {
-        alert(`"${file.name}" — JPG/PNG/WEBP/GIF 형식만 올릴 수 있어요.`)
+        alert(t('errFileType', { name: file.name }))
         continue
       }
       if (file.size > MAX_FILE_BYTES) {
-        alert(`"${file.name}" — 5MB 이하의 이미지만 올릴 수 있어요.`)
+        alert(t('errFileSize', { name: file.name }))
         continue
       }
       newSlots.push({
@@ -177,7 +189,7 @@ export default function DonorNewPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
       // 만약 세션이 끊겼다면 슬롯 모두 제거하고 로그인 화면으로
-      alert('로그인이 만료되었습니다. 다시 로그인해 주세요.')
+      alert(t('errSessionExpired'))
       newSlots.forEach(s => URL.revokeObjectURL(s.previewUrl))
       setSlots(prev => prev.filter(p => !newSlots.includes(p)))
       router.push('/login')
@@ -208,7 +220,7 @@ export default function DonorNewPage() {
           })
 
         if (uploadError) {
-          alert(`업로드 실패: ${uploadError.message}`)
+          alert(t('errUploadFailed', { message: uploadError.message }))
           // 해당 슬롯 제거
           URL.revokeObjectURL(slot.previewUrl)
           setSlots(prev => prev.filter(p => p.key !== slot.key))
@@ -240,7 +252,7 @@ export default function DonorNewPage() {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // 💾 폼 제출 — items 테이블에 한 줄 INSERT
+  // 💾 폼 제출 — items 테이블에 한 줄 INSERT 후 /admin 으로 즉시 이동
   // ─────────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -249,7 +261,7 @@ export default function DonorNewPage() {
 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
-      alert('로그인이 만료되었습니다. 다시 로그인해 주세요.')
+      alert(t('errSessionExpired'))
       router.push('/login')
       setIsSaving(false)
       return
@@ -260,25 +272,28 @@ export default function DonorNewPage() {
       .filter(s => !s.isUploading && !!s.publicUrl)
       .map(s => s.publicUrl as string)
 
+    // status='available' 로 명시 — 운영팀이 등록하면 곧바로 예약 가능한 재고가 됩니다.
+    // (P2P 시절의 픽업 위치(location) 필드는 중앙 보관소 모델에서 불필요해 제거)
     const { error } = await supabase.from('items').insert({
       owner_id:    user.id,
       title:       title.trim(),
       description: description.trim() || null,
       category,
       condition,
-      location:    location.trim() || null,
+      price:       Number(price.trim()),   // 💰 운영팀이 설정한 크레딧 가격
       image_urls:  imageUrls,
+      status:      'available',
     })
 
-    setIsSaving(false)
-
     if (error) {
-      alert('저장 중 오류가 발생했습니다: ' + error.message)
+      setIsSaving(false)
+      alert(t('errSaveFailed', { message: error.message }))
       return
     }
 
-    alert('✅ 물품이 루프에 올라갔어요!')
-    router.push('/mypage')
+    // 성공 — 빠른 입력 흐름을 위해 별도 알림 없이 대시보드로 즉시 이동.
+    //   새 물품은 [재고] 탭에서 바로 확인할 수 있어요. (isSaving 은 유지해 중복 제출 차단)
+    router.push('/admin')
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -289,19 +304,19 @@ export default function DonorNewPage() {
 
   return (
     <main className="max-w-2xl mx-auto px-6 py-12 font-sans relative">
-      {/* 미인증 사용자에게는 본문 위에 차단 모달 — 본문은 뒤에 미리보기처럼 노출 */}
-      {verifyState === 'unverified' && <VerificationRequiredModal />}
+      {/* 운영팀(admin)이 아니면 본문 위에 차단 모달 — 본문은 뒤에 미리보기처럼 노출 */}
+      {accessState === 'denied' && <AdminRequiredModal />}
 
       {/* ── 헤더 — 마이크로 라벨 + 큰 타이틀 (Mintlify 리듬) */}
       <header className="mb-10">
         <p className="text-[11px] font-semibold tracking-[0.5px] uppercase text-mint-deep mb-3">
-          Put it on the loop
+          {t('label')}
         </p>
         <h1 className="text-[36px] sm:text-[40px] font-semibold leading-[1.1] tracking-[-0.5px] text-ink mb-3">
-          물품 등록하기
+          {t('title')}
         </h1>
         <p className="text-[16px] leading-[1.55] text-steel">
-          떠나기 전 남은 짐을, 다음 주인에게 정성껏 소개해 주세요.
+          {t('subtitle')}
         </p>
       </header>
 
@@ -310,8 +325,8 @@ export default function DonorNewPage() {
         {/* ── 1) 사진 업로드 영역 ─────────────────────────────── */}
         <section>
           <SectionLabel
-            title="사진"
-            hint={`최대 ${MAX_FILES}장 · JPG/PNG/WEBP/GIF · 한 장당 5MB 이하`}
+            title={t('sectionPhotos')}
+            hint={t('photosHint', { max: MAX_FILES })}
           />
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
             {slots.map(slot => (
@@ -333,36 +348,20 @@ export default function DonorNewPage() {
 
         {/* ── 2) 제목 (필수) ───────────────────────────────────── */}
         <section>
-          <SectionLabel title="제목" required />
+          <SectionLabel title={t('sectionTitle')} required />
           <input
             type="text"
             value={title}
             onChange={e => setTitle(e.target.value)}
             maxLength={60}
-            placeholder="예: 거의 새 것인 미니 주전자"
+            placeholder={t('titlePlaceholder')}
             className="w-full h-12 px-4 rounded-xl bg-canvas border border-hairline text-[15px] text-ink placeholder:text-stone focus:outline-none focus:border-mint focus:ring-2 focus:ring-mint/20 transition-colors"
           />
         </section>
 
-        {/* ── 3) 설명 ─────────────────────────────────────────── */}
+        {/* ── 3) 카테고리 ─────────────────────────────────────── */}
         <section>
-          <SectionLabel title="설명" hint="사용 기간, 흠집 위치 등 솔직하게 적어주세요" />
-          <textarea
-            value={description}
-            onChange={e => setDescription(e.target.value)}
-            rows={5}
-            maxLength={500}
-            placeholder="예: 1년 정도 사용했고 손잡이에 작은 흠집 하나 있어요."
-            className="w-full px-4 py-3 rounded-xl bg-canvas border border-hairline text-[15px] text-ink placeholder:text-stone focus:outline-none focus:border-mint focus:ring-2 focus:ring-mint/20 transition-colors resize-none"
-          />
-          <p className="text-[12px] text-stone text-right mt-1.5">
-            {description.length} / 500
-          </p>
-        </section>
-
-        {/* ── 4) 카테고리 ─────────────────────────────────────── */}
-        <section>
-          <SectionLabel title="카테고리" />
+          <SectionLabel title={t('sectionCategory')} />
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {CATEGORY_OPTIONS.map(opt => {
               const selected = opt.value === category
@@ -379,16 +378,16 @@ export default function DonorNewPage() {
                   aria-pressed={selected}
                 >
                   <span aria-hidden>{opt.icon}</span>
-                  <span>{opt.label}</span>
+                  <span>{t(`cat${opt.value}`)}</span>
                 </button>
               )
             })}
           </div>
         </section>
 
-        {/* ── 5) 상태 등급 ────────────────────────────────────── */}
+        {/* ── 4) 상태 등급 ────────────────────────────────────── */}
         <section>
-          <SectionLabel title="상태 등급" />
+          <SectionLabel title={t('sectionCondition')} />
           <div className="grid grid-cols-3 gap-2">
             {CONDITION_OPTIONS.map(opt => {
               const selected = opt.value === condition
@@ -407,36 +406,60 @@ export default function DonorNewPage() {
                   <span className="flex items-center gap-2">
                     <span className={`w-2 h-2 rounded-full ${opt.dotColor}`} />
                     <span className={`text-[14px] font-semibold ${selected ? 'text-mint-deep' : 'text-ink'}`}>
-                      {opt.label}
+                      {t(`cond${opt.value}`)}
                     </span>
                   </span>
-                  <span className="text-[12px] text-steel">{opt.description}</span>
+                  <span className="text-[12px] text-steel">{t(`cond${opt.value}Desc`)}</span>
                 </button>
               )
             })}
           </div>
         </section>
 
-        {/* ── 6) 픽업 위치 ────────────────────────────────────── */}
+        {/* ── 5) 크레딧 가격 (필수) ───────────────────────────── */}
         <section>
-          <SectionLabel title="픽업 가능 위치" hint="예: 신촌역 2번 출구, 학생회관 1층 등" />
-          <input
-            type="text"
-            value={location}
-            onChange={e => setLocation(e.target.value)}
-            maxLength={80}
-            placeholder="만나서 건네줄 수 있는 장소를 적어주세요"
-            className="w-full h-12 px-4 rounded-xl bg-canvas border border-hairline text-[15px] text-ink placeholder:text-stone focus:outline-none focus:border-mint focus:ring-2 focus:ring-mint/20 transition-colors"
+          <SectionLabel title={t('sectionPrice')} hint={t('priceHint')} required />
+          <div className="relative">
+            <input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              step={1}
+              value={price}
+              onChange={e => setPrice(e.target.value)}
+              placeholder={t('pricePlaceholder')}
+              className="w-full h-12 pl-4 pr-20 rounded-xl bg-canvas border border-hairline text-[15px] text-ink placeholder:text-stone focus:outline-none focus:border-mint focus:ring-2 focus:ring-mint/20 transition-colors tabular-nums [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+            {/* 단위 표시 — 입력 클릭을 방해하지 않도록 pointer-events 없음 */}
+            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[13px] font-medium text-stone pointer-events-none">
+              {t('priceUnit')}
+            </span>
+          </div>
+        </section>
+
+        {/* ── 6) 설명 ─────────────────────────────────────────── */}
+        <section>
+          <SectionLabel title={t('sectionDescription')} hint={t('descriptionHint')} />
+          <textarea
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+            rows={5}
+            maxLength={500}
+            placeholder={t('descriptionPlaceholder')}
+            className="w-full px-4 py-3 rounded-xl bg-canvas border border-hairline text-[15px] text-ink placeholder:text-stone focus:outline-none focus:border-mint focus:ring-2 focus:ring-mint/20 transition-colors resize-none"
           />
+          <p className="text-[12px] text-stone text-right mt-1.5">
+            {description.length} / 500
+          </p>
         </section>
 
         {/* ── 하단 액션 ───────────────────────────────────────── */}
         <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 pt-4">
           <Link
-            href="/mypage"
+            href="/admin"
             className="text-[14px] font-medium text-steel hover:text-ink transition-colors self-start sm:self-auto"
           >
-            ← 나중에 등록하기
+            {t('back')}
           </Link>
 
           <button
@@ -444,7 +467,7 @@ export default function DonorNewPage() {
             disabled={!canSubmit}
             className="inline-flex items-center justify-center h-12 px-7 rounded-full bg-ink text-canvas text-[15px] font-medium hover:bg-charcoal disabled:bg-hairline disabled:text-muted disabled:cursor-not-allowed transition-colors"
           >
-            {isSaving ? '저장 중...' : '🚀 루프에 올리기'}
+            {isSaving ? t('btnSaving') : t('btnAdd')}
           </button>
         </div>
       </form>
@@ -542,8 +565,9 @@ function AddImageCell({
 }: {
   onFilesSelected: (files: FileList | null) => void
 }) {
+  const t = useTranslations('AdminNew')
   // 이 input은 시각적으로 숨기고 label이 클릭 영역 역할을 합니다.
-  const inputId = 'donor-new-image-add'
+  const inputId = 'admin-new-image-add'
 
   return (
     <label
@@ -565,7 +589,7 @@ function AddImageCell({
         />
         <circle cx="12" cy="12.5" r="3.2" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
-      <span className="text-[12px] font-medium text-steel">사진 추가</span>
+      <span className="text-[12px] font-medium text-steel">{t('addPhoto')}</span>
 
       <input
         id={inputId}
@@ -584,15 +608,15 @@ function AddImageCell({
 }
 
 // ═════════════════════════════════════════════════════════════════
-// 🔒 인증 필수 모달 — 미인증 사용자에게 띄우는 차단 오버레이
-// (다른 페이지의 모달과 톤·문구를 통일)
+// 🔒 운영팀 전용 모달 — admin 이 아닌 사용자에게 띄우는 차단 오버레이
+// (B2C 전환 후 재고 등록은 운영팀만 가능)
 // ═════════════════════════════════════════════════════════════════
-function VerificationRequiredModal() {
+function AdminRequiredModal() {
   return (
     <div
       role="dialog"
       aria-modal="true"
-      aria-labelledby="verify-required-title"
+      aria-labelledby="admin-required-title"
       className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-ink/40 backdrop-blur-sm animate-in fade-in duration-200"
     >
       <div className="w-full max-w-md bg-canvas border border-hairline rounded-2xl p-8 shadow-[0_20px_60px_rgba(10,10,10,0.18)] animate-in zoom-in-95 duration-200">
@@ -600,30 +624,30 @@ function VerificationRequiredModal() {
           🔒
         </div>
         <p className="text-[11px] font-semibold tracking-[0.5px] uppercase text-mint-deep mb-2">
-          Verification Required
+          Admin Only
         </p>
         <h2
-          id="verify-required-title"
+          id="admin-required-title"
           className="text-[24px] font-semibold text-ink leading-[1.25] tracking-[-0.3px] mb-3"
         >
-          물품을 등록하려면 학생 인증이 필요해요
+          재고 등록은 운영팀 전용이에요
         </h2>
         <p className="text-[15px] leading-[1.6] text-steel mb-7">
-          Onloop은 연세대 캠퍼스 안에서만 도는 신뢰 기반 서비스예요.
-          연세대 이메일이나 입학 서류로 인증을 마치면, 바로 물품을 올릴 수 있어요.
+          Onloop은 운영팀이 직접 보관소 재고를 관리하는 방식으로 운영돼요.
+          필요한 물품이 있다면 탐색 페이지에서 둘러보고 예약해 주세요.
         </p>
         <div className="flex flex-col gap-3">
           <Link
-            href="/verify"
+            href="/receiver/explore"
             className="inline-flex items-center justify-center h-11 px-6 rounded-full bg-ink text-canvas text-[14px] font-medium hover:bg-charcoal transition-colors"
           >
-            지금 인증하러 가기 →
+            물품 탐색하러 가기 →
           </Link>
           <Link
             href="/"
             className="inline-flex items-center justify-center h-10 text-[13px] font-medium text-stone hover:text-ink transition-colors"
           >
-            나중에 할게요
+            홈으로
           </Link>
         </div>
       </div>

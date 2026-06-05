@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Onloop — Campus Circular Exchange</title>
+<link rel="stylesheet" href="style.css">
+<style>
+/* Landing-specific */
+.hero {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 140px 48px 90px;
+  position: relative;
+  overflow: hidden;
+  background: var(--paper);
+}
+.hero-bg { position: absolute; inset: 0; pointer-events: none; }
+.hero-bg::before {
+  content: '';
+  position: absolute;
+  top: -220px; right: -220px;
+  width: 640px; height: 640px;
+  border: 88px solid var(--onloop);
+  border-radius: 50%;
+  opacity: 0.035;
+}
+.hero-bg::after {
+  content: '';
+  position: absolute;
+  bottom: -170px; left: -170px;
+  width: 440px; height: 440px;
+  border: 64px solid var(--onloop-2);
+  border-radius: 50%;
+  opacity: 0.04;
+}
+.hero-content { position: relative; z-index: 2; max-width: 900px; }
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 17px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--onloop);
+  background: var(--onloop-pale);
+  padding: 10px 24px;
+  border-radius: 30px;
+  margin-bottom: 44px;
+  font-weight: 700;
+}
+.hero-badge .dot {
+  width: 9px; height: 9px;
+  background: var(--onloop);
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+.hero-logo-box {
+  margin: 0 auto 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+.hero-logo-box svg { width: 88px; height: 88px; }
+.hero-logo-box span {
+  font-size: 88px;
+  font-weight: 800;
+  color: var(--onloop);
+  letter-spacing: -0.04em;
+}
+
+.hero-slogan {
+  font-size: clamp(48px, 7vw, 84px);
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+  margin-bottom: 18px;
+  color: var(--onloop-dd);
+}
+.hero-slogan .hl { color: var(--onloop); }
+.hero-slogan-en {
+  font-size: 27px;
+  color: var(--muted);
+  margin-bottom: 44px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.hero-desc {
+  font-size: 24px;
+  line-height: 1.65;
+  color: var(--ink-soft);
+  max-width: 640px;
+  margin: 0 auto 50px;
+  font-weight: 400;
+  text-align: center;
+}
+.hero-actions {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 80px;
+}
+.hero-scroll {
+  position: absolute;
+  bottom: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 17px;
+  letter-spacing: 0.22em;
+  font-weight: 700;
+  animation: float 3s ease-in-out infinite;
+}
+@keyframes float {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(10px); }
+}
+
+/* Sections */
+.sec { padding: 160px 48px; position: relative; }
+.sec-inner { max-width: 1140px; margin: 0 auto; }
+.sec-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--onloop);
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-weight: 700;
+}
+.sec-label::before {
+  content: '';
+  width: 32px;
+  height: 3px;
+  background: var(--onloop);
+}
+.sec-heading {
+  font-size: clamp(44px, 5vw, 60px);
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+  margin-bottom: 20px;
+  color: var(--onloop-dd);
+}
+.sec-sub-heading {
+  font-size: 27px;
+  color: var(--muted);
+  margin-bottom: 72px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* Problem */
+.problem { background: var(--white); }
+.problem-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 4px;
+  margin-bottom: 72px;
+}
+.problem-card {
+  padding: 56px 40px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  text-align: center;
+  transition: all 0.3s ease;
+}
+.problem-card:hover { background: var(--onloop-pale); border-color: var(--onloop-l); }
+.problem-icon { font-size: 48px; margin-bottom: 22px; display: block; }
+.problem-stat {
+  font-size: 60px;
+  font-weight: 800;
+  color: var(--onloop);
+  line-height: 1;
+  margin-bottom: 10px;
+  letter-spacing: -0.03em;
+}
+.problem-stat-label {
+  font-size: 27px;
+  font-weight: 800;
+  margin-bottom: 16px;
+  color: var(--onloop-dd);
+  letter-spacing: -0.02em;
+}
+.problem-desc {
+  font-size: 20px;
+  color: var(--muted);
+  line-height: 1.65;
+  font-weight: 500;
+}
+.problem-quote {
+  max-width: 800px;
+  margin: 0 auto;
+  text-align: center;
+  font-size: 33px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.problem-quote em { color: var(--onloop); font-style: normal; font-weight: 800; }
+
+/* How */
+.how { background: var(--paper); }
+.flow-visual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  margin-bottom: 90px;
+  padding: 64px 0;
+}
+.flow-node { text-align: center; flex: 0 0 220px; }
+.flow-node-icon {
+  width: 120px; height: 120px;
+  border-radius: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 24px;
+  font-size: 48px;
+}
+.flow-node-icon.depart { background: var(--warm); border: 2.5px solid var(--line); }
+.flow-node-icon.station { background: var(--onloop); color: #fff; border: 2.5px solid var(--onloop); }
+.flow-node-icon.arrive { background: var(--onloop-pale); border: 2.5px solid var(--onloop-l); }
+.flow-node-title {
+  font-size: 27px;
+  font-weight: 800;
+  margin-bottom: 6px;
+  letter-spacing: -0.02em;
+  color: var(--onloop-dd);
+}
+.flow-node-sub {
+  font-size: 20px;
+  color: var(--muted);
+  font-weight: 700;
+}
+.flow-arrow {
+  flex: 0 0 90px;
+  color: var(--onloop);
+  font-size: 36px;
+  font-weight: 800;
+  margin-bottom: 48px;
+  text-align: center;
+}
+.how-steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+.how-step {
+  padding: 48px 40px;
+  background: var(--white);
+  border: 1px solid var(--line);
+}
+.how-step:hover { border-color: var(--onloop-l); }
+.how-step-num {
+  font-size: 54px;
+  color: var(--onloop);
+  margin-bottom: 20px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+.how-step h3 {
+  font-size: 27px;
+  font-weight: 800;
+  margin-bottom: 16px;
+  color: var(--onloop-dd);
+  letter-spacing: -0.02em;
+}
+.how-step p {
+  font-size: 21px;
+  color: var(--ink-soft);
+  line-height: 1.65;
+  font-weight: 400;
+}
+
+/* For Who */
+.for-who { background: var(--white); }
+.persona-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border: 1px solid var(--line);
+  overflow: hidden;
+  border-radius: 28px;
+}
+.persona { padding: 72px 56px; position: relative; }
+.persona.depart { background: var(--paper); }
+.persona.arrive { background: var(--onloop-bg); }
+.persona-icon { font-size: 56px; margin-bottom: 28px; display: block; }
+.persona-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 17px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 14px;
+  font-weight: 700;
+}
+.persona-title {
+  font-size: 36px;
+  font-weight: 800;
+  margin-bottom: 8px;
+  color: var(--onloop-dd);
+  letter-spacing: -0.02em;
+}
+.persona-title-en {
+  font-size: 24px;
+  color: var(--muted);
+  margin-bottom: 30px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.persona-tagline {
+  font-size: 27px;
+  color: var(--onloop);
+  margin-bottom: 26px;
+  line-height: 1.45;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.persona-list { list-style: none; font-size: 20px; line-height: 2; color: var(--ink-soft); font-weight: 600; }
+.persona-list li { padding-left: 28px; position: relative; }
+.persona-list li::before {
+  content: '→';
+  position: absolute;
+  left: 0;
+  color: var(--onloop);
+  font-weight: 800;
+}
+
+/* Station */
+.station { background: var(--onloop-dd); color: var(--paper); }
+.station .sec-label { color: var(--onloop-l); }
+.station .sec-label::before { background: var(--onloop-l); }
+.station .sec-heading { color: var(--paper); }
+.station .sec-sub-heading { color: rgba(255, 255, 255, 0.5); }
+.station-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+.station-card {
+  padding: 56px 48px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.station-card:hover { background: rgba(255, 255, 255, 0.08); }
+.station-card-icon { font-size: 40px; margin-bottom: 22px; display: block; }
+.station-card h3 {
+  font-size: 30px;
+  font-weight: 800;
+  margin-bottom: 14px;
+  letter-spacing: -0.02em;
+}
+.station-card p {
+  font-size: 21px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.64);
+  font-weight: 400;
+}
+
+/* Wrapup */
+.wrapup {
+  padding: 180px 48px;
+  text-align: center;
+  background: var(--onloop-bg);
+  position: relative;
+  overflow: hidden;
+}
+.wrapup::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 560px; height: 560px;
+  border: 72px solid var(--onloop);
+  border-radius: 50%;
+  opacity: 0.04;
+}
+.wrapup-inner { position: relative; z-index: 2; max-width: 800px; margin: 0 auto; }
+.wrapup-quote {
+  font-size: clamp(36px, 5vw, 52px);
+  line-height: 1.45;
+  letter-spacing: -0.03em;
+  color: var(--onloop-dd);
+  margin-bottom: 36px;
+  font-weight: 800;
+}
+.wrapup-quote em { font-style: normal; font-weight: 900; color: var(--onloop); }
+.wrapup-sub {
+  font-size: 24px;
+  color: var(--muted);
+  margin-bottom: 52px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* Footer */
+footer {
+  background: var(--onloop-dd);
+  color: rgba(255, 255, 255, 0.5);
+  padding: 72px 48px 44px;
+}
+.footer-inner {
+  max-width: 1140px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 52px;
+  padding-bottom: 56px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 40px;
+}
+.footer-col h4 {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 17px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--onloop-l);
+  margin-bottom: 24px;
+  font-weight: 700;
+}
+.footer-col p, .footer-col a {
+  font-size: 21px;
+  line-height: 2;
+  color: rgba(255, 255, 255, 0.58);
+  font-weight: 500;
+}
+.footer-col a:hover { color: var(--onloop-l); }
+.footer-bottom {
+  max-width: 1140px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 17px;
+  letter-spacing: 0.12em;
+  color: rgba(255, 255, 255, 0.35);
+  font-weight: 700;
+}
+
+@media (max-width: 900px) {
+  nav { padding: 0 24px; }
+  .nav-links { display: none; }
+  .sec { padding: 110px 24px; }
+  .hero { padding: 110px 24px 70px; }
+  .hero-logo-box svg { width: 56px; height: 56px; }
+  .hero-logo-box span { font-size: 56px; }
+  .problem-grid, .how-steps, .station-grid { grid-template-columns: 1fr; }
+  .persona-split { grid-template-columns: 1fr; border-radius: 20px; }
+  .flow-visual { flex-direction: column; }
+  .flow-arrow { transform: rotate(90deg); margin: 0; }
+  .footer-inner { grid-template-columns: 1fr; gap: 36px; }
+  .wrapup { padding: 120px 24px; }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-logo" href="#">
+    <svg viewBox="0 0 36 36">
+      <circle cx="18" cy="18" r="14" fill="none" stroke="#034159" stroke-width="2.5"/>
+      <circle cx="18" cy="4" r="4" fill="#025951"/>
+    </svg>
+    onloop
+  </a>
+  <ul class="nav-links">
+    <li><a href="#problem">Why onloop</a></li>
+    <li><a href="#how">How it works</a></li>
+    <li><a href="#for-who">For whom</a></li>
+    <li><a href="#station-sec">Stations</a></li>
+  </ul>
+  <a class="nav-cta" href="onb-01-welcome.html">Start now →</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-content">
+    <div class="hero-badge"><span class="dot"></span> A campus circular exchange platform</div>
+
+    <div class="hero-logo-box">
+      <svg viewBox="0 0 88 88">
+        <circle cx="44" cy="44" r="34" fill="none" stroke="#034159" stroke-width="5"/>
+        <circle cx="44" cy="10" r="9" fill="#F5B82E"/>
+      </svg>
+      <span>onloop</span>
+    </div>
+
+    <h1 class="hero-slogan">On the loop,<br><span class="hl">not in the bin.</span></h1>
+    <p class="hero-slogan-en">Your baggage becomes someone's beginning.</p>
+    <p class="hero-desc">When exchange students leave Seoul, their things deserve another orbit — not the trash. Onloop connects departing students with arriving ones, keeping everyday essentials on a continuous loop.</p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="onb-01-welcome.html">Start now →</a>
+      <a class="btn btn-secondary" href="#how">See how it works</a>
+    </div>
+  </div>
+  <div class="hero-scroll">
+    <span>SCROLL</span>
+    <span>↓</span>
+  </div>
+</section>
+
+<!-- PROBLEM -->
+<section class="sec problem" id="problem">
+  <div class="sec-inner">
+    <div class="sec-label">Why · The problem we solve</div>
+    <h2 class="sec-heading reveal">Every semester, the same story on campus.</h2>
+    <p class="sec-sub-heading reveal">A problem hiding in plain sight.</p>
+
+    <div class="problem-grid">
+      <div class="problem-card reveal reveal-d1">
+        <span class="problem-icon">🗑️</span>
+        <div class="problem-stat">4×</div>
+        <div class="problem-stat-label">Waste spike</div>
+        <div class="problem-desc">Campus waste spikes to 4× the normal volume when exchange students move out — most of it is reusable.</div>
+      </div>
+      <div class="problem-card reveal reveal-d2">
+        <span class="problem-icon">📦</span>
+        <div class="problem-stat">2 weeks</div>
+        <div class="problem-stat-label">Rushed packing</div>
+        <div class="problem-desc">Two weeks before departure, students start packing. Good items get tossed simply because there is no time to find them a new home.</div>
+      </div>
+      <div class="problem-card reveal reveal-d3">
+        <span class="problem-icon">💸</span>
+        <div class="problem-stat">₩300K+</div>
+        <div class="problem-stat-label">Startup cost</div>
+        <div class="problem-desc">New arrivals spend over ₩300,000 on bedding, kitchenware, and daily essentials — often buying the exact things that were thrown away weeks earlier.</div>
+      </div>
+    </div>
+
+    <div class="problem-quote reveal">
+      What's discarded at the end of one semester<br>
+      is exactly what's <em>needed</em> at the start of the next.<br>
+      Onloop bridges that gap.
+    </div>
+  </div>
+</section>
+
+<!-- HOW -->
+<section class="sec how" id="how">
+  <div class="sec-inner">
+    <div class="sec-label">How · How onloop works</div>
+    <h2 class="sec-heading reveal">Three moments in the loop.</h2>
+    <p class="sec-sub-heading reveal">Simple, verified, circular.</p>
+
+    <div class="flow-visual reveal">
+      <div class="flow-node">
+        <div class="flow-node-icon depart">✈️</div>
+        <div class="flow-node-title">Departing student</div>
+        <div class="flow-node-sub">Puts items on the loop</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">
+        <div class="flow-node-icon station">
+          <svg viewBox="0 0 44 44" width="44" height="44">
+            <circle cx="22" cy="22" r="16" fill="none" stroke="#fff" stroke-width="2.5"/>
+            <circle cx="22" cy="6" r="4.5" fill="#F5B82E"/>
+          </svg>
+        </div>
+        <div class="flow-node-title">Onloop station</div>
+        <div class="flow-node-sub">Inspect · store · manage</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">
+        <div class="flow-node-icon arrive">🏠</div>
+        <div class="flow-node-title">Arriving student</div>
+        <div class="flow-node-sub">Picks items off the loop</div>
+      </div>
+    </div>
+
+    <div class="how-steps">
+      <div class="how-step reveal reveal-d1">
+        <div class="how-step-num">01</div>
+        <h3>List</h3>
+        <p>Before leaving, list your unused items with one text field. Our AI sorts them into categories automatically — under two minutes.</p>
+      </div>
+      <div class="how-step reveal reveal-d2">
+        <div class="how-step-num">02</div>
+        <h3>Inspect & store</h3>
+        <p>Drop your items at a station. Our team checks quality and stores them safely until the next semester begins.</p>
+      </div>
+      <div class="how-step reveal reveal-d3">
+        <div class="how-step-num">03</div>
+        <h3>Claim</h3>
+        <p>Arriving students browse, tag what they need, and pick it up with a QR code at the campus station on the day they land.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOR WHO -->
+<section class="sec for-who" id="for-who">
+  <div class="sec-inner">
+    <div class="sec-label">For · Two sides of one loop</div>
+    <h2 class="sec-heading reveal">For those leaving, and those arriving.</h2>
+    <p class="sec-sub-heading reveal">Every departure is someone else's beginning.</p>
+
+    <div class="persona-split reveal">
+      <div class="persona depart">
+        <span class="persona-icon">✈️</span>
+        <div class="persona-label">The Departing</div>
+        <div class="persona-title">Item donors</div>
+        <div class="persona-title-en">Leave light. Leave warm.</div>
+        <div class="persona-tagline">"Light hands, warm heart."</div>
+        <ul class="persona-list">
+          <li>No more packing stress</li>
+          <li>List your items in under 2 minutes</li>
+          <li>Nothing gets thrown — everything is passed on</li>
+          <li>Leave a beautiful trace of your time here</li>
+        </ul>
+      </div>
+      <div class="persona arrive">
+        <span class="persona-icon">🏠</span>
+        <div class="persona-label">The Arriving</div>
+        <div class="persona-title">Item recipients</div>
+        <div class="persona-title-en">A welcome from those who came before.</div>
+        <div class="persona-tagline">"A welcome left for you."</div>
+        <ul class="persona-list">
+          <li>Your essentials are already waiting</li>
+          <li>Trusted, verified community items</li>
+          <li>Save hundreds of thousands of won</li>
+          <li>Start your Seoul life with onloop</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- STATION -->
+<section class="sec station" id="station-sec">
+  <div class="sec-inner">
+    <div class="sec-label">Station · Onloop campus stations</div>
+    <h2 class="sec-heading reveal">Where objects change hands.</h2>
+    <p class="sec-sub-heading reveal">Physical hubs on every partner campus.</p>
+
+    <div class="station-grid">
+      <div class="station-card reveal reveal-d1">
+        <span class="station-card-icon">📍</span>
+        <h3>Operated on campus</h3>
+        <p>We partner with international offices and student councils to run physical circulation spaces directly on campus, concentrated at semester start and end.</p>
+      </div>
+      <div class="station-card reveal reveal-d2">
+        <span class="station-card-icon">🔒</span>
+        <h3>University-verified trust</h3>
+        <p>Every member is verified with a university letter of acceptance. A safe, closed community of fellow students — never strangers.</p>
+      </div>
+      <div class="station-card reveal reveal-d1">
+        <span class="station-card-icon">🌐</span>
+        <h3>Web-connected</h3>
+        <p>Register items before you depart. Browse items before you arrive. Online and offline, one unified loop.</p>
+      </div>
+      <div class="station-card reveal reveal-d2">
+        <span class="station-card-icon">🤝</span>
+        <h3>Cultural continuity</h3>
+        <p>Pass items — and cultural tips — to students from similar backgrounds. An organic handoff between generations of exchange students.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- WRAP-UP -->
+<section class="wrapup">
+  <div class="wrapup-inner">
+    <svg width="52" height="60" viewBox="0 0 40 48" style="display:block;margin:0 auto 48px">
+      <circle cx="20" cy="24" r="16" fill="none" stroke="#034159" stroke-width="2.5"/>
+      <circle cx="20" cy="8" r="4" fill="#F5B82E"/>
+    </svg>
+
+    <div class="wrapup-quote reveal">
+      A beautiful person leaves behind<br>a <em>beautiful place</em>.
+    </div>
+    <p class="wrapup-sub reveal">Be part of the loop — start today.</p>
+
+    <div class="reveal">
+      <a class="btn btn-primary" href="onb-01-welcome.html" style="font-size: 24px; padding: 22px 56px;">Join onloop →</a>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-col">
+      <h4>Onloop</h4>
+      <p>A campus circular exchange platform<br>Seoul Environmental Coalition · Team A</p>
+    </div>
+    <div class="footer-col">
+      <h4>Links</h4>
+      <a href="onb-01-welcome.html">Put items on the loop</a><br>
+      <a href="onb-01-welcome.html">Claim items</a><br>
+      <a href="#">FAQ</a><br>
+      <a href="#">Contact</a>
+    </div>
+    <div class="footer-col">
+      <h4>Connect</h4>
+      <a href="#">Instagram</a><br>
+      <a href="#">KakaoTalk</a><br>
+      <a href="#">Email</a>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2026 onloop — Team A, Seoul Environmental Coalition</span>
+    <span>Seoul, South Korea</span>
+  </div>
+</footer>
+
+<script>
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => { if (entry.isIntersecting) entry.target.classList.add('visible'); });
+}, { threshold: 0.12 });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>
