@@ -33,14 +33,17 @@
   background: var(--paper);
 }
 
-/* 랜딩 내부 공통 리셋 — 목업 style.css 에 있던 기본값을 이 스코프 안에서 보강 */
+/* 랜딩 내부 공통 리셋 — 목업 style.css 에 있던 기본값을 이 스코프 안에서 보강
+   ⚠️ 요소 선택자는 반드시 :where() 로 감싸 주세요!
+   `.page p` 는 명시도가 (0,1,1) 이라 `.heroDesc` 같은 단일 클래스(0,1,0)의
+   margin 을 덮어써 버립니다(실제로 페이지 전체 여백이 사라지는 버그가 있었음).
+   :where() 는 명시도를 0 으로 만들어 '기본값' 역할만 하고, 아래의 컴포넌트
+   클래스들이 항상 이기도록 보장합니다. */
 .page * { box-sizing: border-box; }
 .page a { text-decoration: none; color: inherit; }
-.page h1,
-.page h2,
-.page h3 { margin: 0; }
-.page p { margin: 0; }
-.page ul { margin: 0; padding: 0; }
+.page :where(h1, h2, h3) { margin: 0; }
+.page :where(p) { margin: 0; }
+.page :where(ul) { margin: 0; padding: 0; }
 
 /* ── 공용 버튼 (목업의 .btn / .btn-primary / .btn-secondary 재현) ── */
 .btn {

@@ -184,15 +184,12 @@ export default function Home() {
           <div className={styles.howSteps}>
             <div className={cx(styles.howStep, styles.reveal, styles.revealD1)}>
               <div className={styles.howStepNum}>01</div>
-              <h3>List</h3>
-              <p>
-                Before leaving, list your unused items with one text field. Our AI sorts them into
-                categories automatically — under two minutes.
-              </p>
+              <h3>Hand Over</h3>
+              <p>Before leaving, just hand your items to us. We are locating nearby!</p>
             </div>
             <div className={cx(styles.howStep, styles.reveal, styles.revealD2)}>
               <div className={styles.howStepNum}>02</div>
-              <h3>Inspect &amp; store</h3>
+              <h3>Store</h3>
               <p>
                 Drop your items at a station. Our team checks quality and stores them safely until
                 the next semester begins.
@@ -202,11 +199,18 @@ export default function Home() {
               <div className={styles.howStepNum}>03</div>
               <h3>Claim</h3>
               <p>
-                Arriving students browse, tag what they need, and pick it up with a QR code at the
-                campus station on the day they land.
+                Arriving students browse, tag what they need before getting on a plane, and pick it
+                up at the campus station on the day they land.
               </p>
             </div>
           </div>
+
+          {/* 3단계 아래 강조 문구 — "비행기 타기 전에 예약" 핵심 메시지를 한 번 더 짚어줍니다. */}
+          <p className={cx(styles.problemQuote, styles.reveal)} style={{ marginTop: 56 }}>
+            Arriving students can browse and reserve items on our website{' '}
+            <em>&ldquo;before getting on a plane.&rdquo;</em> Just pick them up at the campus
+            station on the day you land.
+          </p>
         </div>
       </section>
 
@@ -230,7 +234,6 @@ export default function Home() {
               <div className={styles.personaTagline}>&ldquo;Light hands, warm heart.&rdquo;</div>
               <ul className={styles.personaList}>
                 <li>No more packing stress</li>
-                <li>List your items in under 2 minutes</li>
                 <li>Nothing gets thrown — everything is passed on</li>
                 <li>Leave a beautiful trace of your time here</li>
               </ul>
@@ -287,12 +290,9 @@ export default function Home() {
               </p>
             </div>
             <div className={cx(styles.stationCard, styles.reveal, styles.revealD2)}>
-              <span className={styles.stationCardIcon}>🤝</span>
-              <h3>Cultural continuity</h3>
-              <p>
-                Pass items — and cultural tips — to students from similar backgrounds. An organic
-                handoff between generations of exchange students.
-              </p>
+              <span className={styles.stationCardIcon}>🔄</span>
+              <h3>Continuity</h3>
+              <p>An organic handoff between generations of exchange students.</p>
             </div>
           </div>
         </div>
@@ -331,24 +331,15 @@ export default function Home() {
 
       {/* ══════════════════════ FOOTER ══════════════════════ */}
       <footer className={styles.footer}>
-        <div className={styles.footerInner}>
+        {/* 목업의 2단 구성에 맞춰 grid 를 인라인으로 1fr 1fr 로 좁힙니다.
+            목업의 .html 링크는 실제 라우트로 교체: r-browse.html → /receiver/explore,
+            r-home.html → /mypage */}
+        <div className={styles.footerInner} style={{ gridTemplateColumns: '1fr 1fr' }}>
           <div className={styles.footerCol}>
-            <h4>Onloop</h4>
-            <p>
-              A campus circular exchange platform
-              <br />
-              Seoul Environmental Coalition · Team A
-            </p>
-          </div>
-          <div className={styles.footerCol}>
-            <h4>Links</h4>
-            <Link href="/receiver/explore">Put items on the loop</Link>
-            <br />
+            <h4>Get on the Loop</h4>
             <Link href="/receiver/explore">Claim items</Link>
             <br />
-            <a href="#problem">FAQ</a>
-            <br />
-            <a href="#station-sec">Contact</a>
+            <Link href="/mypage">My Loop</Link>
           </div>
           <div className={styles.footerCol}>
             <h4>Connect</h4>
