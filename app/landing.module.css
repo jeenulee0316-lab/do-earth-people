@@ -503,7 +503,9 @@
   max-width: 1140px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  /* 데스크톱 기본 2단 ('Get on the Loop' / 'Connect').
+     모바일(900px 이하)에서는 아래 미디어 쿼리가 1단으로 쌓아 줍니다. */
+  grid-template-columns: 1fr 1fr;
   gap: 52px;
   padding-bottom: 56px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);

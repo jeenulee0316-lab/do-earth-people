@@ -331,10 +331,10 @@ export default function Home() {
 
       {/* ══════════════════════ FOOTER ══════════════════════ */}
       <footer className={styles.footer}>
-        {/* 목업의 2단 구성에 맞춰 grid 를 인라인으로 1fr 1fr 로 좁힙니다.
+        {/* 2단 구성은 landing.module.css 의 .footerInner 가 담당 (모바일에선 1단으로 쌓임).
             목업의 .html 링크는 실제 라우트로 교체: r-browse.html → /receiver/explore,
             r-home.html → /mypage */}
-        <div className={styles.footerInner} style={{ gridTemplateColumns: '1fr 1fr' }}>
+        <div className={styles.footerInner}>
           <div className={styles.footerCol}>
             <h4>Get on the Loop</h4>
             <Link href="/receiver/explore">Claim items</Link>
@@ -343,7 +343,14 @@ export default function Home() {
           </div>
           <div className={styles.footerCol}>
             <h4>Connect</h4>
-            <a href="#">Instagram</a>
+            {/* 온루프 공식 인스타그램 — 새 탭으로 열리며, noopener noreferrer 로 보안 처리 */}
+            <a
+              href="https://www.instagram.com/onloop_yonsei?igsh=MWR6MzA5aWhwYm56cg%3D%3D&utm_source=qr"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Instagram
+            </a>
             <br />
             <a href="#">KakaoTalk</a>
             <br />
