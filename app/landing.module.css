@@ -1,0 +1,585 @@
+/* ══════════════════════════════════════════════════════════════════
+   🌿 Onloop B2C 랜딩 페이지 스타일 (mockup index.html 이식본)
+   ────────────────────────────────────────────────────────────────────
+   원본 목업의 style.css 가 저장소에 없어, 목업이 사용하던 색 변수
+   (--onloop, --paper 등)를 이 파일 안에서 직접 정의합니다.
+   브랜드 톤(딥 틸-그린 + 따뜻한 종이색 + 노란 액센트)에 맞춰
+   재구성했으며, 모든 변수는 최상위 .page 래퍼에 선언해 하위로 상속됩니다.
+
+   ※ 색을 바꾸고 싶다면 아래 .page 의 변수 한 곳만 수정하면 됩니다.
+   ══════════════════════════════════════════════════════════════════ */
+.page {
+  /* ── 브랜드 틸-그린 계열 ── */
+  --onloop:       #025951;   /* 시그니처 그린 — 액센트, 하이라이트 */
+  --onloop-2:     #0a7d6f;   /* 보조 그린 */
+  --onloop-l:     #4db6a4;   /* 밝은 그린 — 옅은 테두리 */
+  --onloop-dd:    #023540;   /* 가장 진한 톤 — 헤드라인 / 다크 섹션 배경 */
+  --onloop-pale:  #e8f5f1;   /* 아주 옅은 그린 틴트 (배지·카드 hover) */
+  --onloop-bg:    #f0f9f6;   /* 옅은 그린 배경 (섹션) */
+
+  /* ── 표면 / 종이색 ── */
+  --paper:    #faf8f3;   /* 따뜻한 오프화이트 (히어로 배경) */
+  --white:    #ffffff;
+  --warm:     #f5efe4;   /* 따뜻한 베이지 (떠나는 학생 노드) */
+
+  /* ── 텍스트 / 라인 ── */
+  --ink-soft: #2b3a3a;   /* 부드러운 본문 텍스트 */
+  --muted:    #8a9a96;   /* 흐린 보조 텍스트 */
+  --line:     #e3e0d8;   /* 1px 경계선 */
+
+  --font-mono: var(--font-mono), 'JetBrains Mono', ui-monospace, monospace;
+
+  color: var(--ink-soft);
+  background: var(--paper);
+}
+
+/* 랜딩 내부 공통 리셋 — 목업 style.css 에 있던 기본값을 이 스코프 안에서 보강
+   ⚠️ 요소 선택자는 반드시 :where() 로 감싸 주세요!
+   `.page p` 는 명시도가 (0,1,1) 이라 `.heroDesc` 같은 단일 클래스(0,1,0)의
+   margin 을 덮어써 버립니다(실제로 페이지 전체 여백이 사라지는 버그가 있었음).
+   :where() 는 명시도를 0 으로 만들어 '기본값' 역할만 하고, 아래의 컴포넌트
+   클래스들이 항상 이기도록 보장합니다. */
+.page * { box-sizing: border-box; }
+.page a { text-decoration: none; color: inherit; }
+.page :where(h1, h2, h3) { margin: 0; }
+.page :where(p) { margin: 0; }
+.page :where(ul) { margin: 0; padding: 0; }
+
+/* ── 공용 버튼 (목업의 .btn / .btn-primary / .btn-secondary 재현) ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  font-weight: 700;
+  padding: 18px 38px;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  letter-spacing: -0.01em;
+}
+/* ⚠️ 주의: 아래 두 선택자에 .btn 을 함께 붙여 명시도(0,2,0)를 올렸어요.
+   윗줄 `.page a { color: inherit }` 가 (0,1,1) 이라, 단일 클래스 .btnPrimary(0,1,0)
+   로는 색이 묻혀 어두운 본문색을 그대로 상속해 버립니다(=초록 버튼 위에 검은 글씨).
+   .btn.btnPrimary 형태로 적어 두면 (0,2,0) 이 되어 늘 흰색이 이깁니다. */
+.btn.btnPrimary {
+  background: var(--onloop);
+  color: #ffffff;
+  border-color: var(--onloop);
+}
+.btn.btnPrimary:hover {
+  background: var(--onloop-dd);
+  color: #ffffff;
+  border-color: var(--onloop-dd);
+  transform: translateY(-2px);
+}
+.btn.btnSecondary {
+  background: transparent;
+  color: var(--onloop-dd);
+  border-color: var(--line);
+}
+.btn.btnSecondary:hover {
+  border-color: var(--onloop-l);
+  background: var(--white);
+}
+
+/* ════════════════════════════ HERO ════════════════════════════ */
+.hero {
+  /* 전역 sticky 헤더(64px) 아래에서 화면을 꽉 채우도록 calc 사용 */
+  min-height: calc(100vh - 64px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 100px 48px 90px;
+  position: relative;
+  overflow: hidden;
+  background: var(--paper);
+}
+.heroBg { position: absolute; inset: 0; pointer-events: none; }
+.heroBg::before {
+  content: '';
+  position: absolute;
+  top: -220px; right: -220px;
+  width: 640px; height: 640px;
+  border: 88px solid var(--onloop);
+  border-radius: 50%;
+  opacity: 0.035;
+}
+.heroBg::after {
+  content: '';
+  position: absolute;
+  bottom: -170px; left: -170px;
+  width: 440px; height: 440px;
+  border: 64px solid var(--onloop-2);
+  border-radius: 50%;
+  opacity: 0.04;
+}
+.heroContent { position: relative; z-index: 2; max-width: 900px; }
+.heroBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 17px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--onloop);
+  background: var(--onloop-pale);
+  padding: 10px 24px;
+  border-radius: 30px;
+  margin-bottom: 44px;
+  font-weight: 700;
+}
+.heroBadge .dot {
+  width: 9px; height: 9px;
+  background: var(--onloop);
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+.heroLogoBox {
+  margin: 0 auto 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+.heroLogoBox svg { width: 88px; height: 88px; }
+.heroLogoBox span {
+  font-size: 88px;
+  font-weight: 800;
+  color: var(--onloop);
+  letter-spacing: -0.04em;
+}
+
+.heroSlogan {
+  font-size: clamp(48px, 7vw, 84px);
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+  margin-bottom: 18px;
+  color: var(--onloop-dd);
+}
+.heroSlogan .hl { color: var(--onloop); }
+.heroSloganEn {
+  font-size: 27px;
+  color: var(--muted);
+  margin-bottom: 44px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.heroDesc {
+  font-size: 24px;
+  line-height: 1.65;
+  color: var(--ink-soft);
+  max-width: 640px;
+  margin: 0 auto 50px;
+  font-weight: 400;
+  /* 히어로 설명 문단은 명시적으로 가운데 정렬합니다. */
+  text-align: center;
+}
+.heroActions {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+  /* 하단의 .heroScroll(SCROLL ↓) 와 버튼이 겹치지 않도록 충분한 여백 확보. */
+  margin-bottom: 80px;
+}
+.heroScroll {
+  position: absolute;
+  bottom: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 17px;
+  letter-spacing: 0.22em;
+  font-weight: 700;
+  animation: float 3s ease-in-out infinite;
+}
+@keyframes float {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(10px); }
+}
+
+/* ════════════════════════════ SECTIONS ════════════════════════════ */
+.sec { padding: 160px 48px; position: relative; scroll-margin-top: 64px; }
+.secInner { max-width: 1140px; margin: 0 auto; }
+.secLabel {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--onloop);
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-weight: 700;
+}
+.secLabel::before {
+  content: '';
+  width: 32px;
+  height: 3px;
+  background: var(--onloop);
+}
+.secHeading {
+  font-size: clamp(44px, 5vw, 60px);
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+  margin-bottom: 20px;
+  color: var(--onloop-dd);
+}
+.secSubHeading {
+  font-size: 27px;
+  color: var(--muted);
+  margin-bottom: 72px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* ── PROBLEM ── */
+.problem { background: var(--white); }
+.problemGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 4px;
+  margin-bottom: 72px;
+}
+.problemCard {
+  padding: 56px 40px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  text-align: center;
+  transition: all 0.3s ease;
+}
+.problemCard:hover { background: var(--onloop-pale); border-color: var(--onloop-l); }
+.problemIcon { font-size: 48px; margin-bottom: 22px; display: block; }
+.problemStat {
+  font-size: 60px;
+  font-weight: 800;
+  color: var(--onloop);
+  line-height: 1;
+  margin-bottom: 10px;
+  letter-spacing: -0.03em;
+}
+.problemStatLabel {
+  font-size: 27px;
+  font-weight: 800;
+  margin-bottom: 16px;
+  color: var(--onloop-dd);
+  letter-spacing: -0.02em;
+}
+.problemDesc {
+  font-size: 20px;
+  color: var(--muted);
+  line-height: 1.65;
+  font-weight: 500;
+}
+.problemQuote {
+  max-width: 800px;
+  margin: 0 auto;
+  text-align: center;
+  font-size: 33px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.problemQuote em { color: var(--onloop); font-style: normal; font-weight: 800; }
+
+/* ── HOW ── */
+.how { background: var(--paper); }
+.flowVisual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  margin-bottom: 90px;
+  padding: 64px 0;
+}
+.flowNode { text-align: center; flex: 0 0 220px; }
+.flowNodeIcon {
+  width: 120px; height: 120px;
+  border-radius: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 24px;
+  font-size: 48px;
+}
+.flowNodeIcon.depart { background: var(--warm); border: 2.5px solid var(--line); }
+.flowNodeIcon.station { background: var(--onloop); color: #fff; border: 2.5px solid var(--onloop); }
+.flowNodeIcon.arrive { background: var(--onloop-pale); border: 2.5px solid var(--onloop-l); }
+.flowNodeTitle {
+  font-size: 27px;
+  font-weight: 800;
+  margin-bottom: 6px;
+  letter-spacing: -0.02em;
+  color: var(--onloop-dd);
+}
+.flowNodeSub {
+  font-size: 20px;
+  color: var(--muted);
+  font-weight: 700;
+}
+.flowArrow {
+  flex: 0 0 90px;
+  color: var(--onloop);
+  font-size: 36px;
+  font-weight: 800;
+  margin-bottom: 48px;
+  text-align: center;
+}
+.howSteps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+.howStep {
+  padding: 48px 40px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  transition: border-color 0.3s ease;
+}
+.howStep:hover { border-color: var(--onloop-l); }
+.howStepNum {
+  font-size: 54px;
+  color: var(--onloop);
+  margin-bottom: 20px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+.howStep h3 {
+  font-size: 27px;
+  font-weight: 800;
+  margin-bottom: 16px;
+  color: var(--onloop-dd);
+  letter-spacing: -0.02em;
+}
+.howStep p {
+  font-size: 21px;
+  color: var(--ink-soft);
+  line-height: 1.65;
+  font-weight: 400;
+}
+
+/* ── FOR WHO ── */
+.forWho { background: var(--white); }
+.personaSplit {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border: 1px solid var(--line);
+  overflow: hidden;
+  border-radius: 28px;
+}
+.persona { padding: 72px 56px; position: relative; }
+.persona.depart { background: var(--paper); }
+.persona.arrive { background: var(--onloop-bg); }
+.personaIcon { font-size: 56px; margin-bottom: 28px; display: block; }
+.personaLabel {
+  font-family: var(--font-mono);
+  font-size: 17px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 14px;
+  font-weight: 700;
+}
+.personaTitle {
+  font-size: 36px;
+  font-weight: 800;
+  margin-bottom: 8px;
+  color: var(--onloop-dd);
+  letter-spacing: -0.02em;
+}
+.personaTitleEn {
+  font-size: 24px;
+  color: var(--muted);
+  margin-bottom: 30px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.personaTagline {
+  font-size: 27px;
+  color: var(--onloop);
+  margin-bottom: 26px;
+  line-height: 1.45;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.personaList { list-style: none; font-size: 20px; line-height: 2; color: var(--ink-soft); font-weight: 600; }
+.personaList li { padding-left: 28px; position: relative; }
+.personaList li::before {
+  content: '→';
+  position: absolute;
+  left: 0;
+  color: var(--onloop);
+  font-weight: 800;
+}
+
+/* ── STATION (다크 섹션) ── */
+.station { background: var(--onloop-dd); color: var(--paper); }
+.station .secLabel { color: var(--onloop-l); }
+.station .secLabel::before { background: var(--onloop-l); }
+.station .secHeading { color: var(--paper); }
+.station .secSubHeading { color: rgba(255, 255, 255, 0.5); }
+.stationGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+.stationCard {
+  padding: 56px 48px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: background 0.3s ease;
+}
+.stationCard:hover { background: rgba(255, 255, 255, 0.08); }
+.stationCardIcon { font-size: 40px; margin-bottom: 22px; display: block; }
+.stationCard h3 {
+  font-size: 30px;
+  font-weight: 800;
+  margin-bottom: 14px;
+  letter-spacing: -0.02em;
+}
+.stationCard p {
+  font-size: 21px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.64);
+  font-weight: 400;
+}
+
+/* ── WRAP-UP ── */
+.wrapup {
+  padding: 180px 48px;
+  text-align: center;
+  background: var(--onloop-bg);
+  position: relative;
+  overflow: hidden;
+}
+.wrapup::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 560px; height: 560px;
+  border: 72px solid var(--onloop);
+  border-radius: 50%;
+  opacity: 0.04;
+}
+.wrapupInner { position: relative; z-index: 2; max-width: 800px; margin: 0 auto; }
+.wrapupQuote {
+  font-size: clamp(36px, 5vw, 52px);
+  line-height: 1.45;
+  letter-spacing: -0.03em;
+  color: var(--onloop-dd);
+  margin-bottom: 36px;
+  font-weight: 800;
+}
+.wrapupQuote em { font-style: normal; font-weight: 900; color: var(--onloop); }
+.wrapupSub {
+  font-size: 24px;
+  color: var(--muted);
+  margin-bottom: 52px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* ── FOOTER ── */
+.footer {
+  background: var(--onloop-dd);
+  color: rgba(255, 255, 255, 0.5);
+  padding: 72px 48px 44px;
+}
+.footerInner {
+  max-width: 1140px;
+  margin: 0 auto;
+  display: grid;
+  /* 데스크톱 기본 2단 ('Get on the Loop' / 'Connect').
+     모바일(900px 이하)에서는 아래 미디어 쿼리가 1단으로 쌓아 줍니다. */
+  grid-template-columns: 1fr 1fr;
+  gap: 52px;
+  padding-bottom: 56px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 40px;
+}
+.footerCol h4 {
+  font-family: var(--font-mono);
+  font-size: 17px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--onloop-l);
+  margin-bottom: 24px;
+  font-weight: 700;
+}
+.footerCol p, .footerCol a {
+  font-size: 21px;
+  line-height: 2;
+  color: rgba(255, 255, 255, 0.58);
+  font-weight: 500;
+}
+.footerCol a:hover { color: var(--onloop-l); }
+.footerBottom {
+  max-width: 1140px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 17px;
+  letter-spacing: 0.12em;
+  color: rgba(255, 255, 255, 0.35);
+  font-weight: 700;
+}
+
+/* ════════════════════════ SCROLL REVEAL ════════════════════════
+   목업 <script> 의 IntersectionObserver 효과를 그대로 재현합니다.
+   기본 상태는 살짝 아래로 내려간 채 투명(opacity:0),
+   화면에 들어와 .visible 이 붙으면 부드럽게 떠오릅니다. */
+.reveal {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.7s ease, transform 0.7s ease;
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+/* 카드들이 시차를 두고 순차적으로 나타나도록 딜레이를 줍니다. */
+.revealD1 { transition-delay: 0.1s; }
+.revealD2 { transition-delay: 0.2s; }
+.revealD3 { transition-delay: 0.3s; }
+
+/* ════════════════════════ 반응형 (≤900px) ════════════════════════ */
+@media (max-width: 900px) {
+  .sec { padding: 110px 24px; }
+  .hero { padding: 80px 24px 70px; }
+  .heroLogoBox svg { width: 56px; height: 56px; }
+  .heroLogoBox span { font-size: 56px; }
+  .problemGrid, .howSteps, .stationGrid { grid-template-columns: 1fr; }
+  .personaSplit { grid-template-columns: 1fr; border-radius: 20px; }
+  .flowVisual { flex-direction: column; }
+  .flowArrow { transform: rotate(90deg); margin: 0; }
+  .footerInner { grid-template-columns: 1fr; gap: 36px; }
+  .wrapup { padding: 120px 24px; }
+}
+
+/* 접근성: 모션 최소화 설정 시 애니메이션·리빌 효과를 끕니다. */
+@media (prefers-reduced-motion: reduce) {
+  .heroBadge .dot,
+  .heroScroll { animation: none; }
+  .reveal { opacity: 1; transform: none; transition: none; }
+}
