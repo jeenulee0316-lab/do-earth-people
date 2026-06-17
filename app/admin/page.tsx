@@ -40,6 +40,10 @@ type StorageItem = {
   condition: string | null
   status: 'available' | 'reserved' | 'stored' | 'completed'
   created_at: string
+  // 🎁 이 물품이 묶인 웰컴 키트(kits)의 id. 아직 안 묶인 단품이면 null.
+  //   admin_list_storage_items RPC 는 이 값을 내려주지 않아, init()에서
+  //   items 테이블을 한 번 더 조회해 재고(available) 물품에만 채워 넣습니다.
+  kit_id: string | null
   // 🗓️ 픽업 예약(날짜 + 시간대) — 사용자가 예약 단계에서 직접 선택
   dropoff_date: string | null
   dropoff_time_slot: string | null
@@ -93,6 +97,24 @@ export default function AdminPage() {
   // 🍞 화면 상단에 잠깐 떴다 사라지는 성공 토스트 (null = 안 보임)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
 
+  // 🎁 키트 묶기(패키징) 상태
+  //   selectedIds  : 지금 체크된 물품 id 모음 (Set = 중복 없이 빠른 포함 검사)
+  //   kitModalOpen : 키트 만들기 모달 열림 여부
+  //   kitName/Desc : 모달 입력값(키트 이름 / 설명)
+  //   creatingKit  : 생성 요청 진행 중(버튼 로딩 + 중복 클릭 방지)
+  //   kitError     : 생성 실패 시 모달 안에 보여줄 오류 메시지
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [kitModalOpen, setKitModalOpen] = useState(false)
+  const [kitName, setKitName] = useState('')
+  const [kitDescription, setKitDescription] = useState('')
+  const [creatingKit, setCreatingKit] = useState(false)
+  const [kitError, setKitError] = useState<string | null>(null)
+  // 🎁→📦 키트 해제(언번들) 진행 중인 물품 id (버튼 중복 클릭 방지)
+  const [unbundlingId, setUnbundlingId] = useState<string | null>(null)
+  // 🔒 '예약됨' 등 active 가 아닌 키트의 id 모음 — 이 키트의 구성품은 해제를 막습니다.
+  //   (예약된 키트를 풀면 예약 데이터와 어긋나므로, 운영팀도 임의 해제 불가)
+  const [lockedKitIds, setLockedKitIds] = useState<Set<string>>(new Set())
+
   // 토스트는 3초 뒤 자동으로 사라짐 — 메시지가 바뀔 때마다 타이머를 새로 건다.
   useEffect(() => {
     if (toastMessage === null) return
@@ -124,15 +146,52 @@ export default function AdminPage() {
 
       setGuard('admin')
 
-      // 관리자 확인됨 — 재고 전체(available/reserved/completed)를 한 번에 로딩.
-      const { data, error } = await supabase.rpc('admin_list_storage_items')
+      // 관리자 확인됨 — 세 가지를 동시에 불러옵니다.
+      //   (A) admin_list_storage_items RPC : 재고 전체(available/reserved/completed)
+      //   (B) items.kit_id 조회 : RPC 가 kit_id 를 안 주므로, 재고(available) 물품이
+      //       이미 키트에 묶였는지 따로 확인하려고 가볍게 id+kit_id 만 가져옵니다.
+      //   (C) kits 상태 조회 : '예약됨'(active 가 아닌) 키트의 구성품은 해제를 막기 위해.
+      const [
+        { data, error },
+        { data: kitRows, error: kitFetchError },
+        { data: kitStatusRows, error: kitStatusError },
+      ] = await Promise.all([
+        supabase.rpc('admin_list_storage_items'),
+        supabase.from('items').select('id, kit_id').eq('status', 'available'),
+        supabase.from('kits').select('id, status'),
+      ])
       if (error) {
         console.error('[admin] rpc error', error)
         setLoadError(error.message)
         setItems([])
         return
       }
-      setItems((data ?? []) as StorageItem[])
+
+      // id → kit_id 매핑. (B)가 실패해도 치명적이지 않으니 빈 맵으로 진행.
+      if (kitFetchError) console.warn('[admin] kit_id 조회 실패(무시하고 진행)', kitFetchError)
+      const kitIdByItem = new Map<string, string | null>(
+        (kitRows ?? []).map(r => {
+          const row = r as { id: string; kit_id: string | null }
+          return [String(row.id), row.kit_id ?? null]
+        })
+      )
+
+      // 🔒 active 가 아닌(=예약됨 등) 키트 id 모음 — 이 키트 구성품은 해제 버튼을 잠급니다.
+      if (kitStatusError) console.warn('[admin] 키트 상태 조회 실패(무시하고 진행)', kitStatusError)
+      const locked = new Set<string>(
+        (kitStatusRows ?? [])
+          .map(r => r as { id: string; status: string | null })
+          .filter(k => k.status !== 'active')
+          .map(k => String(k.id))
+      )
+      setLockedKitIds(locked)
+
+      // RPC 결과에 kit_id 를 합쳐 넣습니다. (available 외 행은 null 로 두면 됨)
+      const enriched: StorageItem[] = ((data ?? []) as StorageItem[]).map(it => ({
+        ...it,
+        kit_id: kitIdByItem.get(String(it.id)) ?? null,
+      }))
+      setItems(enriched)
     }
     init()
   }, [router])
@@ -264,10 +323,186 @@ export default function AdminPage() {
 
       // 성공 — 화면 목록에서 즉시 제거(새로고침 불필요) + 모달 닫고 토스트
       setItems(prev => prev.filter(it => String(it.id) !== String(itemId)))
+      // 혹시 선택돼 있었다면 선택 목록에서도 빼줍니다.
+      setSelectedIds(prev => {
+        if (!prev.has(String(itemId))) return prev
+        const next = new Set(prev)
+        next.delete(String(itemId))
+        return next
+      })
       setDeleteModalItem(null)
       setToastMessage(t('itemDeleted'))
     } finally {
       setDeletingId(null)
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 🎁 키트 묶기(패키징) — 체크박스로 고른 물품들을 하나의 키트로 묶기
+  // ─────────────────────────────────────────────────────────────
+
+  // 체크박스 하나 토글 (선택/해제)
+  const toggleSelect = (itemId: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(itemId)) next.delete(itemId)
+      else next.add(itemId)
+      return next
+    })
+  }
+
+  // 선택 전체 해제
+  const clearSelection = () => setSelectedIds(new Set())
+
+  // "키트로 묶기" 클릭 — 입력값을 초기화하고 모달을 엽니다.
+  const openKitModal = () => {
+    setKitName('')
+    setKitDescription('')
+    setKitError(null)
+    setKitModalOpen(true)
+  }
+
+  // 모달 닫기 (생성 진행 중이면 잠금)
+  const closeKitModal = () => {
+    if (creatingKit) return
+    setKitModalOpen(false)
+    setKitError(null)
+  }
+
+  // 모달에서 "키트 생성 및 묶기" — 핵심 3단계 처리
+  //   1) kits 테이블에 새 키트 한 줄 INSERT → 생성된 id 받기
+  //   2) 그 id 를 선택된 물품들의 kit_id 로 UPDATE
+  //   3) 화면 즉시 반영(체크박스 → 🎁 배지) + 선택 해제 + 토스트
+  const handleCreateKit = async () => {
+    // 키트 이름은 필수 — 비어 있으면 모달 안에서 바로 안내
+    const name = kitName.trim()
+    if (!name) {
+      setKitError(t('kitNameRequired'))
+      return
+    }
+
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return // 선택된 게 없으면 아무 일도 안 함(이론상 버튼이 안 보임)
+
+    setCreatingKit(true)
+    setKitError(null)
+    try {
+      // 1) 새 키트 만들기 — 생성된 행의 id 만 돌려받습니다.
+      const { data: kit, error: insertError } = await supabase
+        .from('kits')
+        .insert({
+          name,
+          description: kitDescription.trim() || null,
+          status: 'active',
+        })
+        .select('id')
+        .single()
+
+      if (insertError || !kit) {
+        console.error('[admin:kit] insert error', insertError)
+        setKitError(t('kitCreateFailed'))
+        return
+      }
+
+      const newKitId = (kit as { id: string }).id
+
+      // 2) 선택된 물품들의 kit_id 를 방금 만든 키트로 연결.
+      //    .select('id') 로 실제 갱신된 행을 받아 화면 반영에 사용합니다.
+      const { data: updated, error: updateError } = await supabase
+        .from('items')
+        .update({ kit_id: newKitId })
+        .in('id', ids)
+        .select('id')
+
+      if (updateError) {
+        console.error('[admin:kit] update error', updateError)
+        setKitError(t('kitCreateFailed'))
+        return
+      }
+
+      // RLS 등으로 0행이 갱신될 수도 있으니, 응답이 비면 우리가 보낸 ids 로 폴백.
+      const assignedIds =
+        updated && updated.length > 0
+          ? new Set(updated.map(r => String((r as { id: string }).id)))
+          : new Set(ids)
+
+      // 3) 화면 즉시 반영 — 묶인 물품에 kit_id 를 채워 체크박스 대신 배지가 뜨게.
+      setItems(prev =>
+        prev.map(it =>
+          assignedIds.has(String(it.id)) ? { ...it, kit_id: newKitId } : it
+        )
+      )
+      setSelectedIds(new Set())
+      setKitModalOpen(false)
+      setToastMessage(t('kitCreated', { count: assignedIds.size }))
+    } finally {
+      setCreatingKit(false)
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 🎁→📦 키트 해제(언번들) — 물품 한 개를 키트에서 빼내기
+  //   1) 이 물품의 kit_id 를 null 로 UPDATE (= 키트에서 분리, 다시 단품)
+  //   2) 화면 즉시 반영 — 배지 대신 다시 체크박스가 보이게(낙관적 업데이트)
+  //   3) (스마트 정리) 부모 키트에 남은 물품이 0개면 빈 키트를 삭제해 유령 키트 방지
+  // ─────────────────────────────────────────────────────────────
+  const handleUnbundle = async (itemId: string) => {
+    if (unbundlingId) return
+    // 화면 상태에서 이 물품이 어떤 키트에 속했는지 먼저 확인.
+    const target = items.find(it => String(it.id) === String(itemId))
+    const kitId = target?.kit_id
+    if (!kitId) return // 이미 단품이면 할 일이 없음
+
+    // 🔒 예약된(active 가 아닌) 키트의 구성품은 해제 불가 — 예약 데이터 보호.
+    //    UI 에서 버튼을 이미 막지만, 만일을 대비한 마지막 방어선입니다.
+    if (lockedKitIds.has(String(kitId))) {
+      setToastMessage(t('unbundleLockedReserved'))
+      return
+    }
+
+    setUnbundlingId(itemId)
+    try {
+      // 1) 이 물품만 키트에서 분리 (kit_id = null).
+      //    .select('id') 로 실제 갱신된 행을 받아 RLS 로 막힌(0행) 경우도 잡아냅니다.
+      const { data: updated, error } = await supabase
+        .from('items')
+        .update({ kit_id: null })
+        .eq('id', itemId)
+        .select('id')
+
+      if (error || !updated || updated.length === 0) {
+        console.error('[admin:unbundle] update error', error)
+        setToastMessage(t('unbundleFailed'))
+        return
+      }
+
+      // 2) 낙관적 UI 갱신 — 새로고침 없이 이 물품을 즉시 "단품"으로.
+      setItems(prev =>
+        prev.map(it => (String(it.id) === String(itemId) ? { ...it, kit_id: null } : it))
+      )
+
+      // 3) 빈 키트 정리 — 이 키트를 가리키는 물품이 더 남았는지 DB 에 직접 확인.
+      //    head:true + count:'exact' 는 행은 안 받고 개수만 가볍게 받아옵니다.
+      let kitRemoved = false
+      const { count, error: countError } = await supabase
+        .from('items')
+        .select('id', { count: 'exact', head: true })
+        .eq('kit_id', kitId)
+
+      if (countError) {
+        // 개수 확인이 실패해도 해제 자체는 성공이므로, 정리만 건너뜁니다.
+        console.warn('[admin:unbundle] 남은 구성품 수 확인 실패(정리 생략)', countError)
+      } else if ((count ?? 0) === 0) {
+        // 남은 구성품이 0개 → 유령 키트가 되지 않도록 빈 키트 행 삭제.
+        const { error: deleteError } = await supabase.from('kits').delete().eq('id', kitId)
+        if (deleteError) console.warn('[admin:unbundle] 빈 키트 삭제 실패', deleteError)
+        else kitRemoved = true
+      }
+
+      // 빈 키트까지 지웠으면 그 사실을 함께 알려주는 토스트로.
+      setToastMessage(kitRemoved ? t('itemUnbundledKitRemoved') : t('itemUnbundled'))
+    } finally {
+      setUnbundlingId(null)
     }
   }
 
@@ -315,6 +550,24 @@ export default function AdminPage() {
     activeTab === 'available' ? availableItems :
     activeTab === 'reserved'  ? reservedItems  :
                                 completedItems
+
+  // 🎁 키트로 묶을 수 있는 후보 = 재고(available) 중 아직 키트에 안 묶인(kit_id 없는) 물품.
+  //   "전체 선택" 체크박스는 이 후보 전부를 한 번에 켜고 끕니다.
+  const bundleableIds = availableItems.filter(i => !i.kit_id).map(i => String(i.id))
+  const allBundleableSelected =
+    bundleableIds.length > 0 && bundleableIds.every(id => selectedIds.has(id))
+
+  const toggleSelectAll = () => {
+    setSelectedIds(prev => {
+      // 후보가 모두 선택돼 있으면 → 후보만 해제, 아니면 → 후보 전부 선택.
+      if (bundleableIds.every(id => prev.has(id))) {
+        const next = new Set(prev)
+        bundleableIds.forEach(id => next.delete(id))
+        return next
+      }
+      return new Set([...prev, ...bundleableIds])
+    })
+  }
 
   return (
     <main className="max-w-5xl mx-auto px-6 py-12">
@@ -391,6 +644,17 @@ export default function AdminPage() {
           completingId={completingId}
           onComplete={openPinModal}
           onDelete={openDeleteModal}
+          // 🎁 재고 탭에서만 선택(체크박스) UI 를 켭니다.
+          selectable={activeTab === 'available'}
+          selectedIds={selectedIds}
+          onToggleSelect={toggleSelect}
+          allSelected={allBundleableSelected}
+          onToggleAll={toggleSelectAll}
+          // 🎁→📦 키트에 묶인 물품을 한 개씩 해제하는 버튼용
+          onUnbundle={handleUnbundle}
+          unbundlingId={unbundlingId}
+          // 🔒 예약된 키트 id 모음 — 이 키트 구성품은 해제 버튼이 잠깁니다.
+          lockedKitIds={lockedKitIds}
         />
       )}
 
@@ -418,6 +682,51 @@ export default function AdminPage() {
           submitting={deletingId === deleteModalItem.id}
           onConfirm={handleConfirmDelete}
           onClose={closeDeleteModal}
+        />
+      )}
+
+      {/* 🎁 선택 액션 바 — 재고 탭에서 물품을 하나라도 고르면 화면 하단에 떠오릅니다.
+          몇 개 골랐는지 + [선택 해제] + [키트로 묶기] 버튼을 모아둔 플로팅 패널. */}
+      {activeTab === 'available' && selectedIds.size > 0 && (
+        <div className="fixed inset-x-0 bottom-6 z-40 flex justify-center px-4 pointer-events-none">
+          <div className="pointer-events-auto flex items-center gap-3 px-4 py-2.5 rounded-full bg-ink text-canvas shadow-[0_12px_32px_rgba(10,10,10,0.22)]">
+            <span className="pl-1.5 text-[14px] font-medium tabular-nums">
+              {t('selectedCount', { count: selectedIds.size })}
+            </span>
+            <button
+              type="button"
+              onClick={clearSelection}
+              className="text-[13px] text-canvas/70 hover:text-canvas transition-colors"
+            >
+              {t('btnClearSelection')}
+            </button>
+            <button
+              type="button"
+              onClick={openKitModal}
+              className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-canvas text-ink text-[13px] font-semibold hover:bg-surface transition-colors"
+            >
+              <span aria-hidden>🎁</span>
+              {t('btnBundle')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 🎁 키트 만들기 모달 — "키트로 묶기"를 눌렀을 때만 표시 */}
+      {kitModalOpen && (
+        <KitModal
+          count={selectedIds.size}
+          name={kitName}
+          description={kitDescription}
+          error={kitError}
+          submitting={creatingKit}
+          onChangeName={(v) => {
+            setKitName(v)
+            if (kitError) setKitError(null) // 다시 입력하면 이전 오류 메시지 지움
+          }}
+          onChangeDescription={setKitDescription}
+          onSubmit={handleCreateKit}
+          onClose={closeKitModal}
         />
       )}
 
@@ -609,6 +918,120 @@ function DeleteModal({
 }
 
 // ═════════════════════════════════════════════════════════════════
+// 🎁 키트 만들기 모달
+// ─────────────────────────────────────────────────────────────────
+// 체크박스로 고른 물품들을 "웰컴 키트" 하나로 묶기 위한 입력 대화상자.
+//   · 키트 이름(필수) + 설명(선택) 두 칸으로 단순하게 구성.
+//   · 배경(반투명 검정)을 누르면 닫힙니다(생성 진행 중이면 잠금).
+//   · 이름칸에서 Enter 로도 제출할 수 있어요.
+//   · error 가 있으면 버튼 위에 빨간 메시지로 보여줍니다.
+// ═════════════════════════════════════════════════════════════════
+function KitModal({
+  count,
+  name,
+  description,
+  error,
+  submitting,
+  onChangeName,
+  onChangeDescription,
+  onSubmit,
+  onClose,
+}: {
+  count: number
+  name: string
+  description: string
+  error: string | null
+  submitting: boolean
+  onChangeName: (v: string) => void
+  onChangeDescription: (v: string) => void
+  onSubmit: () => void | Promise<void>
+  onClose: () => void
+}) {
+  const t = useTranslations('Admin')
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="kit-modal-title"
+      onClick={onClose}
+    >
+      {/* 카드 — 배경 클릭으로 닫히지 않도록 클릭 전파를 멈춤 */}
+      <div
+        className="w-full max-w-md bg-canvas rounded-2xl shadow-xl p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="w-12 h-12 rounded-full bg-mint-tint flex items-center justify-center text-[20px] mb-5">
+          🎁
+        </div>
+        <h2 id="kit-modal-title" className="text-[20px] font-semibold text-ink">
+          {t('kitModalTitle')}
+        </h2>
+        <p className="mt-1.5 text-[13px] leading-[1.6] text-steel">
+          {t('kitModalDesc', { count })}
+        </p>
+
+        {/* 키트 이름 (필수) */}
+        <label htmlFor="kit-name" className="block mt-5 mb-1.5 text-[13px] font-medium text-ink">
+          {t('kitNameLabel')}
+        </label>
+        <input
+          id="kit-name"
+          type="text"
+          autoFocus
+          value={name}
+          onChange={(e) => onChangeName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !submitting) onSubmit()
+          }}
+          placeholder={t('kitNamePlaceholder')}
+          className={`w-full h-11 rounded-xl border bg-canvas px-3.5 text-[14px] text-ink focus:outline-none transition-colors ${
+            error ? 'border-error focus:border-error' : 'border-hairline focus:border-mint'
+          }`}
+        />
+
+        {/* 설명 (선택) */}
+        <label htmlFor="kit-desc" className="block mt-4 mb-1.5 text-[13px] font-medium text-ink">
+          {t('kitDescLabel')}
+        </label>
+        <textarea
+          id="kit-desc"
+          value={description}
+          onChange={(e) => onChangeDescription(e.target.value)}
+          placeholder={t('kitDescPlaceholder')}
+          rows={3}
+          className="w-full rounded-xl border border-hairline bg-canvas px-3.5 py-2.5 text-[14px] text-ink focus:outline-none focus:border-mint transition-colors resize-none"
+        />
+
+        {/* 오류 메시지 (이름 누락 / 생성 실패 등) */}
+        {error && <p className="mt-3 text-[13px] text-error">{error}</p>}
+
+        {/* 액션 — 취소 / 키트 생성 및 묶기 */}
+        <div className="mt-5 flex gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            className="flex-1 h-11 rounded-full border border-hairline text-[14px] font-medium text-steel hover:text-ink hover:border-steel/40 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {t('btnCancelModal')}
+          </button>
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={submitting}
+            className="flex-1 h-11 rounded-full bg-ink text-canvas text-[14px] font-medium hover:bg-charcoal disabled:bg-hairline disabled:text-muted disabled:cursor-not-allowed transition-colors"
+          >
+            {submitting ? t('btnCreatingBundle') : t('btnCreateBundle')}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ═════════════════════════════════════════════════════════════════
 // 탭 버튼 — mypage 와 동일한 underline 인디케이터 (시각 일관성)
 // ═════════════════════════════════════════════════════════════════
 function TabButton({
@@ -659,12 +1082,31 @@ function ItemTable({
   completingId,
   onComplete,
   onDelete,
+  selectable = false,
+  selectedIds,
+  onToggleSelect,
+  allSelected = false,
+  onToggleAll,
+  onUnbundle,
+  unbundlingId,
+  lockedKitIds,
 }: {
   items: StorageItem[]
   tab: Tab
   completingId: string | null
   onComplete: (itemId: string, itemTitle: string) => void | Promise<void>
   onDelete: (itemId: string, itemTitle: string) => void
+  // 🎁 키트 묶기용 선택 props — 재고 탭에서만 selectable=true 로 켭니다.
+  selectable?: boolean
+  selectedIds?: Set<string>
+  onToggleSelect?: (itemId: string) => void
+  allSelected?: boolean
+  onToggleAll?: () => void
+  // 🎁→📦 키트 해제(언번들) props
+  onUnbundle?: (itemId: string) => void
+  unbundlingId?: string | null
+  // 🔒 예약된(active 가 아닌) 키트 id 모음 — 이 키트 구성품은 해제 버튼을 잠급니다.
+  lockedKitIds?: Set<string>
 }) {
   const t = useTranslations('Admin')
   const showReceiver = tab === 'reserved' || tab === 'completed'
@@ -678,6 +1120,18 @@ function ItemTable({
       <table className="w-full text-left border-collapse">
         <thead>
           <tr className="border-b border-hairline">
+            {/* 🎁 선택 열 — 재고 탭에서 "전체 선택" 체크박스 (묶을 수 있는 물품 한정) */}
+            {selectable && (
+              <th className="w-[1%] px-5 py-3">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={onToggleAll}
+                  aria-label={t('selectAll')}
+                  className="h-4 w-4 cursor-pointer rounded border-hairline accent-[#034159]"
+                />
+              </th>
+            )}
             <th className="px-5 py-3 text-[12px] font-semibold uppercase tracking-[0.4px] text-muted">
               {t('colItem')}
             </th>
@@ -717,6 +1171,51 @@ function ItemTable({
                 key={item.id}
                 className="border-b border-hairline-soft last:border-0 hover:bg-surface-soft transition-colors"
               >
+                {/* 🎁 선택 칸 — 아직 안 묶인 물품은 체크박스, 이미 묶인 물품은
+                    키트 배지 + [해제] 버튼(클릭하면 이 물품만 키트에서 빼냄).
+                    단, 예약된 키트의 구성품은 해제 대신 🔒 잠금 표시만 보여줍니다. */}
+                {selectable && (
+                  <td className="px-5 py-4 align-top">
+                    {item.kit_id ? (
+                      <div className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-mint-tint px-2 py-0.5 text-[11px] font-semibold text-mint-deep">
+                          <span aria-hidden>🎁</span>
+                          {t('kitBadge')}
+                        </span>
+                        {lockedKitIds?.has(String(item.kit_id)) ? (
+                          // 🔒 예약된 키트 — 해제 불가. 이유를 title/aria 로 알려줍니다.
+                          <span
+                            role="img"
+                            aria-label={t('unbundleLockedReserved')}
+                            title={t('unbundleLockedReserved')}
+                            className="text-[11px] text-muted"
+                          >
+                            🔒
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => onUnbundle?.(String(item.id))}
+                            disabled={unbundlingId === String(item.id)}
+                            aria-label={t('btnUnbundle')}
+                            className="text-[11px] font-medium text-steel underline-offset-2 hover:text-error hover:underline disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          >
+                            {unbundlingId === String(item.id) ? '…' : t('btnUnbundle')}
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <input
+                        type="checkbox"
+                        checked={selectedIds?.has(String(item.id)) ?? false}
+                        onChange={() => onToggleSelect?.(String(item.id))}
+                        aria-label={t('selectItem')}
+                        className="h-4 w-4 cursor-pointer rounded border-hairline accent-[#034159]"
+                      />
+                    )}
+                  </td>
+                )}
+
                 {/* 물품 — 카테고리 이모지 + 제목 + 등급 */}
                 <td className="px-5 py-4 align-top">
                   <div className="flex items-center gap-3">

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useLocale, useTranslations } from 'next-intl'
 import { supabase } from '@/lib/supabase'
@@ -29,6 +29,41 @@ export default function Login() {
 
   // "Login" 네임스페이스 사전 — 활성 언어 JSON 의 Login 섹션을 가리킵니다.
   const t = useTranslations('Login')
+
+  // ───────────────────────────────────────────────────────────────
+  // 🔐 이미 로그인한 사용자는 로그인 폼을 볼 필요가 없습니다.
+  //   이 프로젝트의 세션은 브라우저(supabase-js, localStorage)에 저장되므로
+  //   서버 미들웨어가 아니라 여기서 클라이언트 측으로 세션을 확인합니다.
+  //   세션이 있으면 곧바로 수령자 탐색 화면(/receiver/explore)으로 보냅니다.
+  //   확인이 끝나기 전까지는(checkingSession) 폼을 잠깐 가려, 로그인된
+  //   사용자에게 폼이 깜빡 보였다 사라지는 현상을 막아줍니다.
+  // ───────────────────────────────────────────────────────────────
+  const [checkingSession, setCheckingSession] = useState(true)
+
+  useEffect(() => {
+    let active = true
+
+    // 현재 세션이 있는지 한 번 확인하고, 있으면 탐색 화면으로 보냅니다.
+    supabase.auth.getSession().then(({ data }) => {
+      if (!active) return
+      if (data.session) {
+        router.replace('/receiver/explore')
+      } else {
+        // 세션이 없을 때만 로그인 폼을 보여줍니다.
+        setCheckingSession(false)
+      }
+    })
+
+    // 다른 탭에서 로그인하는 등 세션이 생기면 즉시 반응해 보내줍니다.
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) router.replace('/receiver/explore')
+    })
+
+    return () => {
+      active = false
+      sub.subscription.unsubscribe()
+    }
+  }, [router])
 
   // 인증 모드 (로그인 / 회원가입) 상태
   const [mode, setMode] = useState<AuthMode>('signIn')
@@ -100,8 +135,8 @@ export default function Login() {
       if (error) {
         setErrorMsg(translateError(error.message))
       } else {
-        // 로그인 성공 시 메인 페이지로 이동
-        router.push('/')
+        // 로그인 성공 시 수령자 탐색 화면으로 이동
+        router.replace('/receiver/explore')
         router.refresh()
       }
     }
@@ -116,6 +151,16 @@ export default function Login() {
   const submitLabel = loading
     ? mode === 'signUp' ? t('btnSigningUp') : t('btnSigningIn')
     : mode === 'signUp' ? t('btnSignUp')    : t('btnSignIn')
+
+  // 세션 확인이 끝나기 전에는 폼 대신 간단한 로딩 화면을 보여줍니다.
+  // (로그인된 사용자에게 로그인 폼이 깜빡 노출되는 것을 방지)
+  if (checkingSession) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-50" lang={locale}>
+        <p className="text-sm text-gray-400">{t('subtitle')}</p>
+      </div>
+    )
+  }
 
   return (
     <div
