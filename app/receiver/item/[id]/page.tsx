@@ -42,6 +42,8 @@ type Item = {
   //   reserved  → 이미 예약됨 (예약 버튼 비활성)
   //   completed → 인수 완료 (예약 버튼 비활성)
   status: 'available' | 'reserved' | 'stored' | 'completed'
+  // 🎁 이 물품이 묶인 웰컴 키트(kits)의 id. 단품이면 null/undefined.
+  kit_id?: string | null
   created_at?: string
 }
 

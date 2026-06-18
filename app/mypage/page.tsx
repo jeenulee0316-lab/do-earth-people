@@ -43,6 +43,8 @@ type Item = {
   image_urls?: string[] | null
   // 새 흐름은 stored 단계를 건너뜁니다: available → reserved → completed
   status: 'available' | 'reserved' | 'stored' | 'completed'
+  // 🎁 이 물품이 묶인 웰컴 키트(kits)의 id. 단품이면 null/undefined.
+  kit_id?: string | null
   created_at?: string
   // 🗓️ 픽업 예약 — 날짜(YYYY-MM-DD) + 미리 정해진 시간대(예: 13:00~14:00).
   //   사용자가 'reserved' 상태에서 직접 골라 운영팀에게 방문 일정을 알립니다.

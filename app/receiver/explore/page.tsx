@@ -1,6 +1,6 @@
 import { getTranslations } from 'next-intl/server'
 import { supabase } from '@/lib/supabase'
-import ExploreGrid, { type ExploreItem } from './ExploreGrid'
+import ExploreGrid, { type ExploreItem, type ExploreKit } from './ExploreGrid'
 
 // ─────────────────────────────────────────────────────────────────
 // 이 페이지는 "서버 컴포넌트"입니다.
@@ -33,19 +33,36 @@ export default async function ExplorePage() {
   // 응답을 함께 받습니다 → 페이지가 그만큼 빨리 뜸.
   // ─────────────────────────────────────────────────────────────
   const [
-    { data, error, count },               // (A) items 결과
-    { data: reservations, error: rError }, // (B) reservations 결과
+    { data, error, count },                  // (A) 단품 items 결과
+    { data: reservations, error: rError },    // (B) reservations 결과
+    { data: kitData, error: kError },         // (C) 예약 가능한 키트 결과
+    { data: kitItemData, error: kiError },    // (D) 키트에 묶인 구성품 결과
   ] = await Promise.all([
-    // 탐색 페이지에는 "아직 양수 가능한" 물품만 노출합니다.
-    //   items.status = 'available' 인 행만 가져와서, 최신 등록 순으로 정렬.
-    //   reserved / completed 상태의 물품은 DB 단계에서 제외돼 카드 자체가 안 그려져요.
+    // (A) 탐색 페이지의 "단품" 카드 — 아직 양수 가능하고(available) + 키트에 안 묶인
+    //     물품만 노출합니다. kit_id 가 있는 물품은 아래 키트 카드 안에서만 보여줘요.
+    //     (그래야 같은 물품이 단품 + 키트 양쪽에 중복으로 뜨지 않습니다.)
     supabase
       .from('items')
       .select('*', { count: 'exact' })
       .eq('status', 'available')
+      .is('kit_id', null)
       .order('created_at', { ascending: false }),
 
     supabase.from('reservations').select('item_id'),
+
+    // (C) 예약 가능한 키트 = status 'active'. 최신 생성 순으로.
+    supabase
+      .from('kits')
+      .select('*')
+      .eq('status', 'active')
+      .order('created_at', { ascending: false }),
+
+    // (D) 키트 구성품 — kit_id 가 채워진 available 물품들. 카드 펼침 미리보기에 사용.
+    supabase
+      .from('items')
+      .select('*')
+      .eq('status', 'available')
+      .not('kit_id', 'is', null),
   ])
 
   // ── 예약된 item_id 목록 만들기 ──────────────────────────────
@@ -54,12 +71,30 @@ export default async function ExplorePage() {
     String((r as { item_id: string | number }).item_id)
   )
 
+  // ── 키트별 구성품 묶기 ──────────────────────────────────────
+  // (D)에서 받은 구성품들을 kit_id 기준으로 그룹핑해, 각 키트에 items 배열로 붙입니다.
+  // 이렇게 미리 묶어 보내면, 카드 클릭 시 추가 요청 없이 즉시 펼쳐 볼 수 있어요.
+  const itemsByKit = new Map<string, ExploreItem[]>()
+  for (const it of (kitItemData as ExploreItem[] | null) ?? []) {
+    const key = String(it.kit_id)
+    const bucket = itemsByKit.get(key)
+    if (bucket) bucket.push(it)
+    else itemsByKit.set(key, [it])
+  }
+
+  // 구성품이 하나도 없는(전부 예약돼 비어버린) 키트는 카드로 보여주지 않습니다.
+  const kits: ExploreKit[] = ((kitData as ExploreKit[] | null) ?? [])
+    .map(k => ({ ...k, items: itemsByKit.get(String(k.id)) ?? [] }))
+    .filter(k => k.items.length > 0)
+
   // ── 진단 로그 (서버 터미널 = `npm run dev` 창에 출력) ─────────
   console.log('[explore] supabase URL    =', process.env.NEXT_PUBLIC_SUPABASE_URL)
   console.log('[explore] items error     =', error)
   console.log('[explore] items count     =', count)
   console.log('[explore] items.length    =', data?.length)
   console.log('[explore] reservations    =', rError ?? `${reservations?.length ?? 0}건`)
+  console.log('[explore] kits            =', kError ?? `${kits.length}개 (구성품 ${kitItemData?.length ?? 0})`)
+  if (kiError) console.warn('[explore] kit items error =', kiError)
   if (data && data.length > 0) {
     console.log('[explore] first row       =', data[0])
   }
@@ -90,9 +125,9 @@ export default async function ExplorePage() {
       )}
 
       {/* ── 전체가 비어있는 상태 ──────────────────────────────
-          에러는 아니지만 받은 행이 0개일 때.
+          에러는 아니지만 단품·키트 모두 0개일 때.
           DB에는 물품이 있는데 여기 들어왔다면 99% RLS 정책 문제입니다. */}
-      {!error && items.length === 0 && (
+      {!error && items.length === 0 && kits.length === 0 && (
         <div className="bg-canvas border border-dashed border-hairline rounded-xl p-12 text-center">
           <div className="text-5xl mb-4">🌱</div>
           <p className="text-[18px] font-semibold text-ink">표시할 물품이 없어요</p>
@@ -100,7 +135,10 @@ export default async function ExplorePage() {
             첫 양도자가 물품을 올리면 이곳에 표시됩니다.
           </p>
 
-          {/* 개발 단계 디버그 안내 — DB에 있는데 비어 보일 때 점검 체크리스트 */}
+          {/* 개발 단계 디버그 안내 — DB에 있는데 비어 보일 때 점검 체크리스트
+              ⚠️ 이 노트는 개발 환경(npm run dev)에서만 보이고, 프로덕션 빌드에서는
+              완전히 숨겨집니다. 실제 사용자에게는 위의 🌱 아이콘과 안내 문구만 노출돼요. */}
+          {process.env.NODE_ENV === 'development' && (
           <div className="mt-8 bg-surface-soft border border-hairline-soft rounded-lg p-5 text-left text-[13px] text-steel leading-[1.6]">
             <p className="font-semibold text-ink mb-2">⚠️ 개발자 노트</p>
             <ul className="list-disc pl-5 space-y-1.5">
@@ -128,14 +166,16 @@ export default async function ExplorePage() {
               </li>
             </ul>
           </div>
+          )}
         </div>
       )}
 
       {/* ── 필터칩 + 카드 그리드 ───────────────────────────────
           상호작용이 필요한 부분만 클라이언트 컴포넌트로 분리해 위임합니다.
-          서버에서 받아온 items를 그대로 props로 넘기면, 필터링은 브라우저에서 즉시 처리돼요. */}
-      {!error && items.length > 0 && (
-        <ExploreGrid items={items} reservedItemIds={reservedItemIds} />
+          서버에서 받아온 items/kits를 그대로 props로 넘기면, 필터링·펼침은 브라우저에서 즉시 처리돼요.
+          단품이 없고 키트만 있어도 그리드를 렌더링합니다(키트 섹션이 보여야 하니까). */}
+      {!error && (items.length > 0 || kits.length > 0) && (
+        <ExploreGrid items={items} reservedItemIds={reservedItemIds} kits={kits} />
       )}
     </main>
   )

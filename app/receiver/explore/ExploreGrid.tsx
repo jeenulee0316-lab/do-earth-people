@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useTranslations } from 'next-intl'
+import KitCard from './KitCard'
 
 // ═════════════════════════════════════════════════════════════════
 // 📚 비전공자 팀원을 위한 1분 설명: 이 파일이 하는 일
@@ -30,7 +31,22 @@ export type ExploreItem = {
   location?: string | null
   image_urls?: string[] | null
   status: 'available' | 'reserved' | 'stored' | 'completed'
+  // 🎁 이 물품이 묶인 웰컴 키트(kits)의 id. 단품이면 null/undefined.
+  kit_id?: string | null
   created_at?: string
+}
+
+// 🎁 한 웰컴 키트(kits 한 행)의 모양 — 부모 page.tsx 에서 내부 물품(items)을
+//   미리 채워(grouping) 넘겨주므로, 카드가 클릭되면 추가 요청 없이 즉시 펼쳐집니다.
+export type ExploreKit = {
+  id: string
+  name: string
+  description?: string | null
+  thumbnail_url?: string | null
+  status: string
+  created_at?: string
+  // 이 키트에 묶인 구성품들 (서버에서 kit_id 로 묶어 전달)
+  items: ExploreItem[]
 }
 
 // ── 등급별 배지 스타일 (탐색/상세 페이지와 동일 매핑) ────────────
@@ -84,11 +100,14 @@ function categoryLabelKey(category: string): 'categoryElectronics' | 'categoryBo
 export default function ExploreGrid({
   items,
   reservedItemIds,
+  kits = [],
 }: {
   items: ExploreItem[]
   // 부모 서버 컴포넌트에서 만들어 넘겨주는 "예약된 물품 id" 목록.
   // Set은 직렬화가 안 되므로 배열로 받아 여기서 Set으로 다시 만듭니다.
   reservedItemIds: string[]
+  // 🎁 예약 가능한 웰컴 키트 목록 (구성품 포함). 없으면 빈 배열.
+  kits?: ExploreKit[]
 }) {
   // Explore 네임스페이스 번역 — messages/{locale}.json 의 "Explore" 키 아래.
   const t = useTranslations('Explore')
@@ -130,10 +149,35 @@ export default function ExploreGrid({
 
   return (
     <>
+      {/* ── 🎁 웰컴 키트 섹션 ─────────────────────────────────
+          단품 그리드 위에 별도 섹션으로 먼저 보여줍니다. 키트는 카테고리(가전/도서…)에
+          속하지 않으므로, 카테고리 필터가 '전체(all)'일 때만 노출해 혼동을 줄여요.
+          단품 카드와 시각적으로 확실히 구분되도록 "웰컴 키트" 배지를 답니다. */}
+      {filter === 'all' && kits.length > 0 && (
+        <section className="mb-12">
+          <div className="mb-4">
+            <h2 className="text-[20px] font-semibold text-ink tracking-[-0.3px]">
+              {t('kitsSectionTitle')}
+            </h2>
+            <p className="text-[13px] text-steel mt-1">{t('kitsSectionSubtitle')}</p>
+          </div>
+
+          {/* 키트는 펼치면 높이가 늘어나므로 items-start 로 형제 카드가 같이 늘지 않게. */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+            {kits.map(kit => (
+              <KitCard key={kit.id} kit={kit} />
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* ── 카테고리 필터 칩 ──────────────────────────────────
           가로로 스크롤되는 칩 줄. 모바일에선 좌우로 슉슉 넘기고
           데스크톱에선 한 줄에 다 들어옵니다.
-          칩 라벨은 t('categories.<value>') 로 현재 언어에서 가져옵니다. */}
+          칩 라벨은 t('categories.<value>') 로 현재 언어에서 가져옵니다.
+          ※ 단품이 하나도 없고 키트만 있을 때는 칩/그리드를 통째로 숨깁니다. */}
+      {items.length > 0 && (
+      <>
       <div className="mb-8 -mx-6 px-6 overflow-x-auto scrollbar-thin">
         <div className="flex items-center gap-2 pb-2 min-w-min">
           {FILTER_CHIPS.map(chip => {
@@ -272,6 +316,8 @@ export default function ExploreGrid({
             )
           })}
         </div>
+      )}
+      </>
       )}
     </>
   )

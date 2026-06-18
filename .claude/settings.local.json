@@ -1,7 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "PowerShell(npx tsc --noEmit -p tsconfig.json 2>&1 | Select-Object -First 30)",
+      "PowerShell(npx tsc --noEmit -p tsconfig.json 2>&1 | Select-Object -First 40)",
+      "PowerShell(npx eslint app/admin/page.tsx 2>&1 | Select-Object -First 30; node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('messages/ko.json'\\)\\); JSON.parse\\(require\\('fs'\\).readFileSync\\('messages/en.json'\\)\\); console.log\\('JSON OK'\\)\")",
+      "PowerShell(npx eslint app/receiver/explore/ExploreGrid.tsx app/receiver/explore/KitCard.tsx app/receiver/explore/page.tsx 2>&1 | Select-Object -First 40; node -e \"JSON.parse\\(require\\('fs'\\).readFileSync\\('messages/ko.json'\\)\\); JSON.parse\\(require\\('fs'\\).readFileSync\\('messages/en.json'\\)\\); console.log\\('JSON OK'\\)\")",
+      "PowerShell(npx next build 2>&1 | Select-Object -Last 45)",
+      "PowerShell(npx next build 2>&1 | Select-Object -Last 20)",
+      "PowerShell(npx next build 2>&1 | Select-Object -Last 8)"
     ]
   }
 }
